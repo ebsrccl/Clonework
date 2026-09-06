@@ -2,9 +2,9 @@
 
 Fondasi source untuk aplikasi Android agen MikroTik. Pengguna belum mempunyai Mikhmon; pemasangan Mikhmon baru menjadi bagian tahap integrasi proyek.
 
-**Status:** source Android dan server agen tersedia. Belum ada APK terkompilasi, server yang dipublikasikan, Mikhmon terpasang, atau pengujian router/OpenAI nyata. Antarmuka Android belum dijalankan atau diperiksa pada emulator/perangkat. Jangan menganggap paket ini sebagai aplikasi produksi yang sudah siap dipasang.
+**Status:** APK debug `0.1.0-foundation` berhasil dikompilasi pada 6 September 2026. Pengujian inti 12/12 dan pemeriksaan tanda tangan APK lulus. Server belum dipublikasikan, Mikhmon belum dipasang, dan router/OpenAI nyata belum diuji. Antarmuka Android belum dijalankan pada emulator/perangkat. Versi ini tersedia untuk uji coba awal.
 
-**Mulai memakai APK:** ikuti [cara build dan pemasangan](docs/CARA_PAKAI_APK.md). Paket kini menyertakan workflow **Build APK MikroTik** yang dapat dijalankan manual melalui GitHub Actions setelah source berada di repository. Konfigurasi workflow sudah diperiksa secara statis; build jarak jauh belum dijalankan.
+**Mulai memakai APK:** unduh artefak **Mikrotik-Agent-APK** dari [build yang berhasil](https://github.com/ebsrccl/Clonework/actions/runs/34038044684), ekstrak ZIP, lalu pasang `Mikrotik-Agent-debug.apk` pada Android 8 atau lebih baru. Pilih **Lihat demo tanpa koneksi** untuk mencoba tampilan. Untuk mengoperasikan router, siapkan server agen HTTPS seperti petunjuk di bawah. [Petunjuk lengkap pemasangan](docs/CARA_PAKAI_APK.md).
 
 ## Isi paket
 
@@ -70,7 +70,7 @@ Mulai ulang server setelah itu. Token lama dicabut. Pengaturan baru dapat dilaku
 
 ## Membangun APK debug
 
-Memerlukan JDK 17, Gradle 8.13, Android SDK Platform 36, dan Android SDK Build Tools yang sesuai. Plugin Android yang dipakai adalah 8.13.2. Build belum dilakukan karena SDK Android/Gradle/JDK compiler tidak tersedia pada lingkungan pembuatan paket ini.
+Memerlukan JDK 17, Gradle 8.13, Android SDK Platform 36, dan Android SDK Build Tools yang sesuai. Plugin Android yang dipakai adalah 8.13.2. Build pertama berhasil melalui GitHub Actions; lingkungan penyuntingan lokal tidak memiliki SDK Android/Gradle/JDK compiler.
 
 1. Buka direktori `android` melalui Android Studio dan sediakan dependensi SDK/Gradle.
 2. Tetapkan SDK lokal melalui Android Studio atau `local.properties` milik mesin sendiri.

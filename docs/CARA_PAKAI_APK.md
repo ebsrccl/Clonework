@@ -1,10 +1,23 @@
 # Cara mendapatkan dan memakai APK
 
-Status 6 September 2026: paket ini masih kode sumber. Konfigurasi build GitHub Actions telah ditambahkan dan diperiksa secara statis, tetapi belum dijalankan. Tidak ada APK hasil build atau deployment server saat dokumen ini dibuat.
+Status 6 September 2026: APK debug `0.1.0-foundation` berhasil dibangun. Dua belas pengujian inti dan pemeriksaan tanda tangan lulus. Server agen HTTPS dan Mikhmon belum dipasang; koneksi router/OpenAI nyata serta interaksi pada perangkat Android belum diuji.
+
+## Pasang hasil build yang sudah tersedia
+
+1. Buka [build berhasil nomor 34038044684](https://github.com/ebsrccl/Clonework/actions/runs/34038044684) dari akun GitHub, lalu unduh artefak **Mikrotik-Agent-APK**. Artefak ini dijadwalkan kedaluwarsa pada 20 September 2026; sesudah itu workflow dapat dibangun ulang.
+2. Ekstrak ZIP dan buka **Mikrotik-Agent-debug.apk** pada Android 8 atau lebih baru. Jika menerima APK langsung dari percakapan, cukup buka berkas APK tersebut.
+3. Jika Android meminta izin pemasangan, izinkan pengelola berkas/browser yang dipakai, lalu lanjutkan pemasangan.
+4. Buka **MikroTik Agent → Lihat demo tanpa koneksi**. Demo tidak memerlukan API key atau router dan memakai data contoh.
+
+Ukuran APK pertama: **26.773 byte**. SHA-256:
+
+```text
+0df178f8e3a26fcaa84db58659ccf50cafef39545e39f2ed7896965ebd39c9e5
+```
 
 ## Repository Clonework
 
-Target yang telah disetujui adalah repository publik [ebsrccl/Clonework](https://github.com/ebsrccl/Clonework). Akses tulis telah dipulihkan dan unggahan berkas pertama berhasil. Build APK memakai workflow **Build APK MikroTik** di [halaman Actions](https://github.com/ebsrccl/Clonework/actions). Hasil APK hanya tersedia setelah pekerjaan build dan pemeriksaan tanda tangan berhasil.
+Source berada di repository publik [ebsrccl/Clonework](https://github.com/ebsrccl/Clonework). Build APK memakai workflow **Build APK MikroTik** di [halaman Actions](https://github.com/ebsrccl/Clonework/actions). Commit kode untuk APK pertama adalah `4bcb31a3f6522a0343a9c4a9f59e3f28420ed19f`.
 
 ## Jalur browser HP: build melalui GitHub Actions
 

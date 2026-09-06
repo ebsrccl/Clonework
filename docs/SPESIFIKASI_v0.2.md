@@ -2,7 +2,7 @@
 
 Versi 0.2 · 6 September 2026
 
-Status: spesifikasi dengan fondasi kode Android dan server agen terpisah. Belum ada APK terkompilasi, instalasi Mikhmon, atau pengujian pada router pengguna.
+Status: spesifikasi dengan fondasi kode Android dan server agen terpisah. APK debug pertama berhasil dikompilasi pada 6 September 2026; instalasi Mikhmon, deployment server, serta pengujian router pengguna belum dilakukan.
 
 ## 1. Kebutuhan yang ditetapkan pengguna
 
@@ -36,7 +36,7 @@ Kredensial diisi melalui formulir aplikasi atau pengaturan server yang aman. Tid
 
 ## 3. Arsitektur yang diusulkan
 
-**APK Android** menyediakan percakapan, status router, daftar kemampuan, dan riwayat tugas. Fondasi pertama memakai Java dan antarmuka Android native tanpa dependensi UI tambahan. Target awal Android 8 atau lebih baru; proyek memakai compile/target SDK 36. Build dan pengujian pada perangkat Android belum dilakukan.
+**APK Android** menyediakan percakapan, status router, daftar kemampuan, dan riwayat tugas. Fondasi pertama memakai Java dan antarmuka Android native tanpa dependensi UI tambahan. Target awal Android 8 atau lebih baru; proyek memakai compile/target SDK 36. Build debug berhasil; pengujian pada perangkat Android belum dilakukan.
 
 **Server pendamping agen** mengelola sesi, mengakses OpenAI, menjalankan fungsi MikroTik, dan menyimpan status tugas. Lokasi server belum ditetapkan. Aplikasi tetap memberikan satu pengalaman masuk; keberadaan server tidak berarti pengguna harus masuk ulang pada setiap tindakan.
 
@@ -104,7 +104,7 @@ Untuk operasi berulang seperti pembuatan voucher, setiap tugas memerlukan penand
 
 ## 9. Batas tahap ini dan informasi berikutnya
 
-Dokumentasi OpenAI, API RouterOS, dan sumber resmi Mikhmon telah diperiksa. Fondasi source Android dan server Node.js sudah dibuat. Belum ada koneksi ke router pengguna, pengujian OpenAI menggunakan key pengguna, integrasi Mikhmon aktif, atau APK terkompilasi. Pengujian inti menggunakan router dan respons OpenAI tiruan; hasilnya tidak membuktikan kompatibilitas perangkat nyata.
+Dokumentasi OpenAI, API RouterOS, dan sumber resmi Mikhmon telah diperiksa. Fondasi source Android dan server Node.js sudah dibuat, dan APK debug berhasil dikompilasi serta diverifikasi tanda tangannya. Belum ada koneksi ke router pengguna, pengujian OpenAI menggunakan key pengguna, atau integrasi Mikhmon aktif. Pengujian inti menggunakan router dan respons OpenAI tiruan; hasilnya tidak membuktikan kompatibilitas perangkat nyata. Bukti build dan batas pengujian dicatat pada `VALIDATION.md`.
 
 Pada fondasi pertama, pengaturan juga memuat alamat server agen dan kode pemasangan yang diberikan pengelola server. Keduanya ada dalam formulir yang sama, bukan login berulang. Penyederhanaan melalui tautan aktivasi merupakan pengembangan berikutnya. Pengaturan rahasia tersimpan sekali dan dapat digunakan setelah server dimulai ulang. Pencabutan atau pemasangan ulang perangkat memerlukan pengaturan ulang.
 
