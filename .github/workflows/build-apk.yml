@@ -55,6 +55,20 @@ jobs:
         working-directory: android
         run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
+      - name: Laporkan hasil pengujian dan kompatibilitas Android
+        if: always()
+        run: |
+          python3 - <<'PYREPORT'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          base = Path('android/app/build')
+          for report in base.glob('intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt'):
+              print(report.read_text())
+          for report in base.glob('test-results/testDebugUnitTest/TEST-*.xml'):
+              suite = ET.parse(report).getroot()
+              print('ANDROID_TEST_RESULT', {k: suite.get(k) for k in ['name', 'tests', 'failures', 'errors', 'skipped']})
+          PYREPORT
+
       - name: Periksa tanda tangan dan siapkan berkas
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-debug.apk
