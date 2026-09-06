@@ -1,3 +1,5 @@
+> Catatan versi lokal 0.2: arsitektur server pada dokumen ini adalah riwayat versi sebelumnya. Arsitektur aktif tanpa VPS dijelaskan di [LOKAL_v0.2.md](LOKAL_v0.2.md).
+
 # Hasil validasi fondasi
 
 Tanggal: 6 September 2026. Runtime pengujian: Node.js v24.19.0.

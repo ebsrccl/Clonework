@@ -14,37 +14,50 @@ import android.view.WindowInsets;
 import android.widget.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private final int BG = Color.rgb(8, 15, 31), CARD = Color.rgb(19, 34, 57),
         TEXT = Color.rgb(232, 240, 248), MUTED = Color.rgb(145, 162, 184), ACCENT = Color.rgb(73, 218, 197);
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private static final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private static LocalAgent sharedAgent;
+    private LocalAgent agent;
     private SecureSession storage;
     private JSONObject session;
     private JSONArray messages = new JSONArray(), plans = new JSONArray();
-    private boolean demo = false, busy = false, destroyed = false;
+    private boolean demo = false, busy = false;
+    private volatile boolean destroyed = false;
     private int tab = 0;
     private LinearLayout root;
     private TextView status;
     private String statusText = "";
     interface Work { JSONObject run() throws Exception; }
     interface Result { void receive(JSONObject result) throws Exception; }
-    static class RevokedSession extends Exception { RevokedSession() { super("Sesi perangkat tidak berlaku. Hubungkan kembali."); } }
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        storage = new SecureSession(this);
+        storage = new SecureSession(getApplicationContext());
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
-        try { session = storage.read(); } catch (Exception ignored) { statusText = "Sesi perangkat tidak dapat dibaca. Hubungkan kembali."; }
-        if (session == null) showSetup(); else { showMain(); refresh(); }
+        try {
+            if (sharedAgent == null) sharedAgent = new LocalAgent(storage);
+            agent = sharedAgent;
+        } catch (Exception error) { statusText = "Data lokal tidak dapat dibaca. Gunakan Hapus data lokal untuk mengatur ulang."; }
+        if (agent == null) { showSetup(); return; }
+        base();
+        perform(() -> {
+            JSONObject profile = agent.profileSummary();
+            return new JSONObject().put("profile", profile == null ? JSONObject.NULL : profile).put("snapshot", agent.snapshot());
+        }, result -> {
+            session = result.optJSONObject("profile"); loadSnapshot(result.getJSONObject("snapshot"));
+            if (session == null) showSetup(); else showMain();
+        });
     }
+    private void loadSnapshot(JSONObject snapshot) {
+        try { messages = snapshot.getJSONArray("messages"); plans = snapshot.getJSONArray("plans"); }
+        catch (Exception error) { setStatus("Riwayat lokal tidak dapat dibaca."); }
+    }
+
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private LinearLayout column() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.VERTICAL); return v; }
     private LinearLayout row() { LinearLayout v = new LinearLayout(this); v.setOrientation(LinearLayout.HORIZONTAL); v.setGravity(Gravity.CENTER_VERTICAL); return v; }
@@ -73,7 +86,7 @@ public class MainActivity extends Activity {
         });
         setContentView(root);
         root.addView(text("MIKROTIK AUTOMATION SYSTEM", 10, ACCENT, true)); space(root, 7);
-        root.addView(text("MikroTik Agent", 28, TEXT, true)); space(root, 5);
+        root.addView(text("MikroTik Agent Lokal", 26, TEXT, true)); space(root, 5);
         status = text(statusText, 12, MUTED, false); root.addView(status); space(root, 16);
     }
     private LinearLayout scroll(LinearLayout parent) {
@@ -93,48 +106,56 @@ public class MainActivity extends Activity {
     private void showSetup() {
         base();
         LinearLayout content = scroll(root), intro = card(content);
-        intro.addView(text("Hubungkan sekali. Kelola lewat chat.", 20, TEXT, true)); space(intro, 9);
-        intro.addView(text("Simpan koneksi router dan asisten untuk pembukaan berikutnya. Mikhmon akan disiapkan sebagai layanan proyek.", 14, MUTED, false));
+        intro.addView(text("Agen di HP. Tanpa VPS.", 20, TEXT, true)); space(intro, 9);
+        intro.addView(text("HP terhubung langsung ke MikroTik. OpenAI memproses pesan dan data router yang diminta. Profil disimpan terenkripsi di HP.", 14, MUTED, false));
         content.addView(button("Lihat demo tanpa koneksi", false, () -> {
             if (busy) return; demo = true; tab = 0; plans = new JSONArray(); messages = new JSONArray();
-            addMessage("assistant", "Ini mode demo dengan data contoh. Coba: cek status router. Belum ada koneksi ke MikroTik atau OpenAI."); showMain();
+            addMessage("assistant", "MODE DEMO: data contoh. Tidak tersambung ke MikroTik atau OpenAI."); showMain();
         })); space(content, 16);
-        LinearLayout service = card(content); service.addView(text("Server agen", 18, TEXT, true)); space(service, 10);
-        EditText gateway = field(service, "Alamat server pribadi", "https://agen.domain-boss.id", false, "");
-        EditText activation = field(service, "Kode pemasangan", "Diberikan saat pemasangan server", true, "");
-        service.addView(text("Kredensial akan disimpan pada server ini. Gunakan alamat server yang Boss kelola.", 12, MUTED, false));
-        LinearLayout router = card(content); router.addView(text("MikroTik", 18, TEXT, true)); space(router, 10);
+        LinearLayout router = card(content); router.addView(text("Koneksi MikroTik", 18, TEXT, true)); space(router, 10);
         EditText name = field(router, "Nama router", "Router utama", false, "Router utama");
-        EditText host = field(router, "Alamat remote / host", "router.domain-boss.id", false, "");
-        EditText port = field(router, "Port API-SSL", "8729", false, "8729"); port.setInputType(InputType.TYPE_CLASS_NUMBER);
-        EditText username = field(router, "Username MikroTik", "Akun router", false, "");
+        EditText host = field(router, "IP / hostname MikroTik", "192.168.88.1 atau host remote", false, "");
+        CheckBox tls = new CheckBox(this); tls.setText("Gunakan API-SSL (TLS)"); tls.setTextColor(TEXT); tls.setChecked(true); router.addView(tls);
+        EditText port = field(router, "Port API MikroTik", "8729 untuk SSL, 8728 untuk API biasa", false, "8729"); port.setInputType(InputType.TYPE_CLASS_NUMBER);
+        tls.setOnCheckedChangeListener((v, checked) -> { if (value(port).equals("8728") || value(port).equals("8729")) port.setText(checked ? "8729" : "8728"); });
+        router.addView(text("API biasa mengirim password tanpa enkripsi dan hanya diizinkan ke alamat LAN/VPN. API-SSL diperlukan untuk alamat publik.", 12, MUTED, false)); space(router, 12);
+        EditText username = field(router, "Username MikroTik", "Akun router dengan izin API", false, "");
         EditText password = field(router, "Password MikroTik", "Password router", true, "");
-        LinearLayout brain = card(content); brain.addView(text("Asisten OpenAI", 18, TEXT, true)); space(brain, 10);
-        EditText key = field(brain, "API key", "API key milik Boss", true, "");
+        EditText fingerprint = field(router, "SHA-256 sertifikat (opsional)", "Untuk sertifikat router yang ditentukan sendiri", false, "");
+        router.addView(text("Kosongkan jika sertifikat dipercaya Android dan sesuai hostname. Untuk sertifikat sendiri, masukkan sidik jari SHA-256 yang diperoleh dari router secara tepercaya.", 12, MUTED, false));
+        LinearLayout brain = card(content); brain.addView(text("OpenAI", 18, TEXT, true)); space(brain, 10);
+        EditText key = field(brain, "API key OpenAI", "Key milik Boss", true, "");
         EditText model = field(brain, "Model", "ID model sesuai akses API", false, "gpt-5-mini");
-        content.addView(button("Uji koneksi & simpan", true, () -> {
+        brain.addView(text("Key dipakai langsung ke api.openai.com. Password router tetap di HP. Uji koneksi membuat permintaan OpenAI menggunakan kuota API.", 12, MUTED, false));
+        content.addView(button("Uji koneksi & simpan di HP", true, () -> {
             if (busy) return;
             try {
-                String base = validGateway(value(gateway));
+                if (agent == null) throw new Exception("Data lokal tidak dapat dibaca. Hapus data lokal untuk mengatur ulang.");
                 JSONObject r = new JSONObject().put("name", value(name)).put("host", value(host)).put("port", Integer.parseInt(value(port)))
-                    .put("username", value(username)).put("password", password.getText().toString());
+                    .put("tls", tls.isChecked()).put("certificate_sha256", value(fingerprint)).put("username", value(username)).put("password", password.getText().toString());
                 JSONObject data = new JSONObject().put("router", r).put("openai_key", value(key)).put("model", value(model));
-                String code = value(activation);
-                perform(() -> {
-                    JSONObject result = request(base, code, "POST", "/v1/setup", data);
-                    JSONObject saved = new JSONObject().put("gateway", base).put("token", result.getString("token"))
-                        .put("router_name", result.getString("router_name")); storage.save(saved); return saved;
-                }, saved -> {
-                    session = saved; demo = false; tab = 0; messages = new JSONArray(); plans = new JSONArray();
-                    key.setText(""); password.setText(""); activation.setText("");
-                    addMessage("assistant", "Koneksi telah diuji dan disimpan. Saya siap memeriksa router. Mikhmon belum dipasang."); showMain();
+                LocalAgent.validateConfig(data);
+                perform(() -> agent.setup(data), saved -> {
+                    session = saved; demo = false; tab = 0; messages = new JSONArray(); plans = new JSONArray(); key.setText(""); password.setText(""); showMain();
+                    setStatus("Koneksi MikroTik dan OpenAI diuji. Profil tersimpan di HP.");
                 });
-            } catch (Exception error) { setStatus("Lengkapi formulir dengan alamat server HTTPS dan port yang valid."); }
-        })); space(content, 16);
+            } catch (NumberFormatException error) { setStatus("Isi port API dengan angka 1–65535."); }
+            catch (Exception error) { setStatus(error.getMessage()); }
+        })); space(content, 14);
+        if (agent == null) content.addView(button("Hapus data lokal yang tidak terbaca", false, this::confirmClear));
+    }
+    private void confirmClear() {
+        if (busy) return;
+        new android.app.AlertDialog.Builder(this).setTitle("Hapus profil dan riwayat di HP?")
+            .setMessage("Kredensial serta riwayat lokal dihapus. Perubahan yang sudah diterapkan pada MikroTik tetap berlaku.")
+            .setNegativeButton("Batal", null).setPositiveButton("Hapus data lokal", (dialog, which) -> perform(() -> {
+                if (agent != null) agent.clear(); else storage.clear();
+                sharedAgent = new LocalAgent(storage); agent = sharedAgent; return new JSONObject();
+            }, result -> { session = null; demo = false; messages = new JSONArray(); plans = new JSONArray(); statusText = "Data lokal dihapus."; showSetup(); })).show();
     }
     private void setStatus(String value) { statusText = value; if (status != null) status.setText(value); }
     private void showMain() {
-        statusText = demo ? "MODE DEMO · DATA CONTOH" : "Koneksi tersimpan · " + session.optString("router_name");
+        statusText = demo ? "MODE DEMO · DATA CONTOH" : "LOKAL DI HP · " + session.optString("router_name");
         if (busy) statusText = "Tugas sedang berjalan…";
         base();
         LinearLayout tabs = row();
@@ -177,9 +198,8 @@ public class MainActivity extends Activity {
                     "DATA CONTOH: Router utama · uptime 2 hari · CPU 8%. Ini simulasi tampilan, bukan pembacaan router atau respons OpenAI. Mode nyata dapat membaca data router dan menyiapkan perubahan bandwidth."); showMain(); return;
             }
             try {
-                JSONObject body = new JSONObject().put("message", message);
-                perform(() -> request(session.getString("gateway"), session.getString("token"), "POST", "/v1/chat", body), result -> {
-                    addMessage("assistant", result.getString("answer")); plans = result.optJSONArray("plans"); if (plans == null) plans = new JSONArray(); showMain();
+                perform(() -> agent.chat(message), result -> {
+                    messages = result.getJSONArray("messages"); plans = result.getJSONArray("plans"); showMain();
                 }); showMain();
             } catch (Exception error) { setStatus("Pesan tidak dapat disiapkan."); }
         });
@@ -189,15 +209,21 @@ public class MainActivity extends Activity {
         LinearLayout content = scroll(root);
         String[][] skills = {{"Monitoring router", "Identitas, sumber daya, interface, dan profil hotspot."},
             {"Bandwidth", "Baca queue, tinjau perubahan, terapkan, lalu periksa hasil."},
-            {"Mikhmon · belum dipasang", "Pemasangan Mikhmon baru masuk tahap integrasi berikutnya."},
+            {"Mikhmon · belum tersedia", "Aplikasi ini memakai RouterOS API langsung. Konektor Mikhmon belum dibuat."},
             {"Modul lanjutan · belum tersedia", "Voucher, PPPoE, firewall, NAT, backup, dan penjadwalan belum diimplementasikan."}};
         for (String[] skill : skills) { LinearLayout v = card(content); v.addView(text(skill[0], 17, TEXT, true)); space(v, 8); v.addView(text(skill[1], 14, MUTED, false)); }
-        content.addView(button(demo ? "Keluar dari demo" : "Putuskan sesi perangkat", false, () -> {
+        if (!demo) {
+            content.addView(button("Cek router langsung · tanpa OpenAI", false, () -> {
+                if (busy) return;
+                perform(() -> agent.execute("router_summary", new JSONObject()), result -> {
+                    tab = 0; addMessage("assistant", "Pembacaan langsung dari MikroTik:\n" + result.toString(2)); showMain();
+                });
+            })); space(content, 12);
+        }
+        content.addView(button(demo ? "Keluar dari demo" : "Hapus profil lokal / ganti koneksi", false, () -> {
             if (busy) return;
             if (demo) { demo = false; messages = new JSONArray(); statusText = ""; showSetup(); return; }
-            perform(() -> request(session.getString("gateway"), session.getString("token"), "POST", "/v1/logout", new JSONObject()), result -> {
-                storage.clear(); session = null; messages = new JSONArray(); plans = new JSONArray(); statusText = "Sesi perangkat sudah dicabut."; showSetup();
-            });
+            confirmClear();
         }));
     }
     private String planStatus(String s) {
@@ -224,7 +250,7 @@ public class MainActivity extends Activity {
             if ("pending".equals(plan.optString("status")) && !demo) {
                 space(v, 12); v.addView(button("Terapkan batas kecepatan ini", true, () -> {
                     if (busy) return;
-                    perform(() -> request(session.getString("gateway"), session.getString("token"), "POST", "/v1/changes/" + plan.getString("id") + "/apply", new JSONObject()), result -> refresh());
+                    perform(() -> { agent.apply(plan.getString("id")); return agent.snapshot(); }, result -> { loadSnapshot(result); showMain(); });
                 }));
             }
         }
@@ -232,10 +258,7 @@ public class MainActivity extends Activity {
     }
     private void refresh() {
         if (busy || demo || session == null) return;
-        perform(() -> request(session.getString("gateway"), session.getString("token"), "GET", "/v1/session", null), result -> {
-            messages = result.optJSONArray("messages"); plans = result.optJSONArray("plans");
-            if (messages == null) messages = new JSONArray(); if (plans == null) plans = new JSONArray(); showMain();
-        });
+        perform(() -> agent.snapshot(), result -> { loadSnapshot(result); showMain(); });
     }
     private void perform(Work work, Result then) {
         if (busy) return; busy = true; setStatus("Menghubungkan dan menjalankan tugas…");
@@ -244,45 +267,15 @@ public class MainActivity extends Activity {
                 JSONObject result = work.run();
                 runOnUiThread(() -> { if (destroyed) return; busy = false; try { then.receive(result); } catch (Exception ignored) { setStatus("Hasil tidak dapat ditampilkan. Muat ulang aktivitas."); } });
             } catch (Exception error) {
+                JSONObject latest = null;
+                try { if (agent != null) latest = agent.snapshot(); } catch (Exception ignored) { }
+                final JSONObject refreshed = latest;
                 runOnUiThread(() -> { if (destroyed) return; busy = false;
-                    if (error instanceof RevokedSession && session != null) {
-                        storage.clear(); session = null; messages = new JSONArray(); plans = new JSONArray();
-                        statusText = "Sesi perangkat tidak berlaku. Hubungkan kembali."; showSetup();
-                    } else setStatus(error.getMessage() == null ? "Koneksi gagal. Periksa server agen." : error.getMessage());
+                    if (!demo && session != null && refreshed != null) { loadSnapshot(refreshed); showMain(); }
+                    setStatus(error.getMessage() == null ? "Tugas gagal. Periksa jaringan HP, MikroTik, dan OpenAI." : error.getMessage());
                 });
             }
         });
     }
-    private String validGateway(String value) throws Exception {
-        URI uri = new URI(value);
-        boolean local = "http".equals(uri.getScheme()) && BuildConfig.DEBUG &&
-            ("10.0.2.2".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost()) || "localhost".equals(uri.getHost()));
-        if ((!"https".equals(uri.getScheme()) && !local) || uri.getHost() == null || uri.getUserInfo() != null ||
-            uri.getQuery() != null || uri.getFragment() != null || !(uri.getPath().isEmpty() || uri.getPath().equals("/"))) throw new Exception("Alamat server harus HTTPS tanpa path tambahan.");
-        return value.replaceAll("/+$", "");
-    }
-    private JSONObject request(String gateway, String token, String method, String path, JSONObject body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URI(validGateway(gateway) + path).toURL().openConnection();
-        connection.setConnectTimeout(15000); connection.setReadTimeout(300000); connection.setInstanceFollowRedirects(false);
-        connection.setRequestMethod(method); connection.setRequestProperty("Authorization", "Bearer " + token);
-        connection.setRequestProperty("Content-Type", "application/json");
-        try {
-            if (body != null) { connection.setDoOutput(true); byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
-                connection.setFixedLengthStreamingMode(data.length); try (java.io.OutputStream out = connection.getOutputStream()) { out.write(data); } }
-            int code = connection.getResponseCode();
-            if (code == 401 && !path.equals("/v1/setup")) throw new RevokedSession();
-            if (code >= 300 && code < 400) throw new Exception("Server mengalihkan alamat. Gunakan alamat HTTPS akhirnya.");
-            InputStream stream = code >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null) throw new Exception("Server mengembalikan HTTP " + code);
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            try (InputStream input = stream) {
-                byte[] buffer = new byte[4096]; int count;
-                while ((count = input.read(buffer)) != -1) { bytes.write(buffer, 0, count); if (bytes.size() > 500000) throw new Exception("Respons server terlalu besar."); }
-            }
-            JSONObject result = new JSONObject(bytes.toString("UTF-8"));
-            if (code >= 400) throw new Exception(result.optString("error", "Server mengembalikan HTTP " + code));
-            return result;
-        } finally { connection.disconnect(); }
-    }
-    @Override protected void onDestroy() { destroyed = true; worker.shutdown(); super.onDestroy(); }
+    @Override protected void onDestroy() { destroyed = true; super.onDestroy(); }
 }

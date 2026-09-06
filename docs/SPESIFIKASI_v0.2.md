@@ -1,3 +1,5 @@
+> Catatan versi lokal 0.2: arsitektur server pada dokumen ini adalah riwayat versi sebelumnya. Arsitektur aktif tanpa VPS dijelaskan di [LOKAL_v0.2.md](LOKAL_v0.2.md).
+
 # Mikrotik Automation System — Spesifikasi Agen Android
 
 Versi 0.2 · 6 September 2026

@@ -1,3 +1,5 @@
+> Catatan versi lokal 0.2: arsitektur server pada dokumen ini adalah riwayat versi sebelumnya. Arsitektur aktif tanpa VPS dijelaskan di [LOKAL_v0.2.md](LOKAL_v0.2.md).
+
 # Penyiapan Mikhmon baru
 
 Pengguna mengonfirmasi pada 6 September 2026 bahwa belum mempunyai Mikhmon. Pembangunan tidak menunggu kredensial atau alamat instalasi lama.

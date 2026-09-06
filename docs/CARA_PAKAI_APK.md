@@ -1,60 +1,45 @@
-# Cara mendapatkan dan memakai APK
+# Memakai MikroTik Agent Lokal 0.2
 
-Status 6 September 2026: APK debug `0.1.0-foundation` berhasil dibangun. Dua belas pengujian inti dan pemeriksaan tanda tangan lulus. Server agen HTTPS dan Mikhmon belum dipasang; koneksi router/OpenAI nyata serta interaksi pada perangkat Android belum diuji.
+Versi ini menggantikan arsitektur APK gateway 0.1 atas permintaan pengguna. Seluruh fungsi agen berjalan di HP; tidak perlu VPS, server agen, atau kode pemasangan. OpenAI tetap memerlukan internet.
 
-## Pasang hasil build yang sudah tersedia
+## Pasang APK
 
-1. Buka [build berhasil nomor 34038044684](https://github.com/ebsrccl/Clonework/actions/runs/34038044684) dari akun GitHub, lalu unduh artefak **Mikrotik-Agent-APK**. Artefak ini dijadwalkan kedaluwarsa pada 20 September 2026; sesudah itu workflow dapat dibangun ulang.
-2. Ekstrak ZIP dan buka **Mikrotik-Agent-debug.apk** pada Android 8 atau lebih baru. Jika menerima APK langsung dari percakapan, cukup buka berkas APK tersebut.
-3. Jika Android meminta izin pemasangan, izinkan pengelola berkas/browser yang dipakai, lalu lanjutkan pemasangan.
-4. Buka **MikroTik Agent → Lihat demo tanpa koneksi**. Demo tidak memerlukan API key atau router dan memakai data contoh.
+Pasang `Mikrotik-Agent-Lokal-0.2.apk`, lalu buka **MikroTik Agent Lokal**. Android minimal versi 8. Aplikasi lokal memakai ID berbeda dari versi 0.1, sehingga kedua aplikasi dapat terpasang bersamaan. Pastikan membuka yang bernama **Lokal**. Tidak perlu menghapus aplikasi lama untuk memasang versi ini.
 
-Ukuran APK pertama: **26.773 byte**. SHA-256:
+Jika Android meminta izin pemasangan, izinkan pengelola berkas/browser yang digunakan untuk membuka berkas APK. **Lihat demo tanpa koneksi** tersedia sebelum pengaturan akun dan memakai data contoh.
 
-```text
-0df178f8e3a26fcaa84db58659ccf50cafef39545e39f2ed7896965ebd39c9e5
-```
+## Isi sekali
 
-## Repository Clonework
+| Isian | Isi |
+| --- | --- |
+| Nama router | Nama bebas untuk mengenali koneksi |
+| IP / hostname MikroTik | Alamat MikroTik yang dapat dijangkau HP; tanpa `http://`, path, atau port |
+| API-SSL | Aktif untuk TLS; matikan hanya jika memakai API biasa melalui LAN/VPN |
+| Port API | Port layanan router; standar SSL 8729 atau API biasa 8728; port remote bisa berbeda |
+| Username dan password MikroTik | Akun router dengan izin API serta izin operasi yang digunakan |
+| SHA-256 sertifikat | Opsional; untuk mempercayai tepat satu sertifikat router sendiri. Ambil fingerprint SHA-256 dari sumber router yang tepercaya. Kosongkan untuk sertifikat yang sudah dipercaya Android dan sesuai hostname |
+| API key OpenAI | Key pribadi dari akun OpenAI API |
+| Model | ID model yang tersedia pada akun API; isian awal `gpt-5-mini` |
 
-Source berada di repository publik [ebsrccl/Clonework](https://github.com/ebsrccl/Clonework). Build APK memakai workflow **Build APK MikroTik** di [halaman Actions](https://github.com/ebsrccl/Clonework/actions). Commit kode untuk APK pertama adalah `4bcb31a3f6522a0343a9c4a9f59e3f28420ed19f`.
+Tekan **Uji koneksi & simpan di HP**. Aplikasi menguji login/baca identitas MikroTik dan akses model OpenAI, kemudian menyimpan profil terenkripsi. Jika salah satu uji gagal, profil baru tidak disimpan. Kata sandi tetap di HP dan dikirim hanya ke router; key dikirim ke OpenAI untuk autentikasi. Pesan dan hasil router yang diperlukan diproses OpenAI.
 
-## Jalur browser HP: build melalui GitHub Actions
+## Jika berada dekat router
 
-GitHub menjalankan kompilasi pada mesinnya. Setelah pekerjaan sukses, pemilik akun dapat mengunduh hasil dari halaman Actions. Akun harus mempunyai akses tulis untuk menjalankan workflow dan akses baca untuk mengunduh artefak. [Menjalankan workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow), [mengunduh hasil](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts).
+Hubungkan HP ke Wi-Fi jaringan MikroTik. Gunakan IP lokal router yang sebenarnya (misalnya `192.168.88.1` jika memang itu IP router). Jika layanan `api` port 8728 sudah aktif, nonaktifkan checkbox API-SSL dan isi 8728. Untuk `api-ssl`, sertifikat router harus tersedia dan bisa diverifikasi. APK tidak mengaktifkan layanan router atau mengubah firewall secara otomatis.
 
-1. Siapkan akun GitHub dan repository milik sendiri. Untuk bantuan langsung dari percakapan, pasang plugin GitHub dan hubungkan akun melalui alur resminya. Ketersediaan akses tulis serta workflow perlu diperiksa setelah koneksi selesai.
-2. Ekstrak ZIP source. Isi folder `mikrotik-agent` harus menjadi akar repository, sehingga `android`, `server`, `docs`, dan direktori konfigurasi workflow berada langsung di akar. Mengunggah ZIP saja ke repository belum membuatnya menjadi proyek yang bisa dibangun.
-3. Pastikan berkas `.github/workflows/build-apk.yml` ada pada branch default repository. Jika pengunggah dari HP melewatkan folder tersebut, buat berkas dengan path lengkap itu menggunakan editor GitHub dan salin isi persis dari paket.
-4. Buka repository melalui browser, lalu pilih **Actions → Build APK MikroTik → Run workflow**. Tampilan situs desktop dapat membantu jika navigasinya sulit terlihat di HP.
-5. Tunggu hasil pekerjaan. Lanjutkan hanya jika pekerjaan sukses. Jika gagal, buka langkah yang merah; APK tidak dianggap tersedia sebelum build dan pemeriksaan tanda tangan berhasil.
-6. Pada bagian **Artifacts**, unduh **Mikrotik-Agent-APK**. Hasil unduhan berupa ZIP; ekstrak untuk memperoleh `Mikrotik-Agent-debug.apk` dan `SHA256SUMS.txt`.
-7. Buka berkas `.apk` melalui pengelola berkas Android. Jika Android meminta izin pemasangan aplikasi dari sumber tersebut, berikan izin untuk pengelola berkas/browser yang digunakan, kemudian lanjutkan pemasangan.
-8. Buka **MikroTik Agent** dan pilih **Lihat demo tanpa koneksi** untuk mencoba tampilannya terlebih dahulu.
+Untuk akses dari luar jaringan, gunakan alamat remote API-SSL yang sudah dapat dijangkau, atau VPN yang sudah tersedia ke jaringan router. Membuat agen lokal tidak otomatis membuka akses remote ke router.
 
-Workflow menggunakan Node.js 24, Java 17, Gradle 8.13, dan Android SDK 36. Pengujian inti dijalankan sebelum build. Berkas OpenAI API key, password router, atau konfigurasi server tidak diperlukan untuk membangun APK dan tidak boleh dimasukkan ke repository. Workflow dapat dijalankan manual dan otomatis berjalan ketika kode Android, server, atau workflow berubah di branch `main`; pemasangan di HP dilakukan pengguna.
+## Memakai agen
 
-Hasilnya APK debug untuk uji coba. Build terpisah dapat memakai kunci debug berbeda; pembaruan di atas instalasi lama mungkin ditolak jika tanda tangan berubah. Penyimpanan kunci penandatanganan rilis yang tetap perlu disiapkan sebelum penggunaan berkelanjutan. Jangan menghapus instalasi aktif tanpa merencanakan pemulihan sesi perangkat.
+- **Chat:** "cek status router", "daftar interface", "tampilkan profil hotspot", "lihat simple queue".
+- **Bandwidth:** sebutkan queue yang tepat dan arah upload/download. Agen membuat usulan; buka **Aktivitas**, tinjau, lalu tekan **Terapkan batas kecepatan ini**.
+- **Skill → Cek router langsung:** membaca router tanpa permintaan OpenAI, setelah profil tersimpan.
+- **Skill → Hapus profil lokal / ganti koneksi:** menghapus kredensial serta riwayat HP setelah konfirmasi. Perubahan yang sudah ditulis ke MikroTik tetap berlaku.
 
-## Jalur komputer: Android Studio
+Jika koneksi putus saat menulis, aplikasi menandai hasil belum pasti dan tidak mengulang perintah otomatis. Periksa router sebelum membuat usulan baru. Jaga aplikasi terbuka selama tugas; belum ada worker persisten untuk tugas saat proses Android dihentikan.
 
-Buka folder `android` di Android Studio, siapkan SDK 36 dan Gradle 8.13, pilih varian **debug**, lalu gunakan menu **Build → Generate Bundle(s) / APK(s) → Generate APK(s)**. Nama menu dapat berbeda pada versi lebih lama. APK debug hasil menu build ditandatangani untuk pemasangan uji coba. [Panduan Android](https://developer.android.com/build/build-for-release).
+Mikhmon dan fungsi voucher belum terintegrasi. Berkas ini tidak menyatakan router/OpenAI nyata sudah diuji menggunakan akun pengguna.
 
-Alternatif dengan Gradle terpasang:
+## Membuat ulang dari GitHub
 
-```bash
-cd android
-gradle :app:assembleDebug
-```
-
-Hasil setelah berhasil: `android/app/build/outputs/apk/debug/app-debug.apk`. Pindahkan berkas ini ke HP, lalu pasang dan buka mode demo.
-
-## Agar agen benar-benar mengoperasikan MikroTik
-
-Mode demo memakai data contoh. Untuk koneksi nyata, server dari folder `server` harus dijalankan pada mesin yang dapat menjangkau router, dengan alamat HTTPS yang dapat diakses HP. Cara menyiapkan server dan sesi ada di README utama.
-
-Setelah server siap, isi sekali dari APK: alamat server dan kode pemasangan, alamat/port API-SSL router beserta akun router, serta API key dan model OpenAI. Membuat APK melalui GitHub Actions tidak menyediakan server agen yang terus menyala.
-
-Kemampuan fondasi yang dapat diuji setelah integrasi: membaca status router/interface/profil hotspot/simple queue dan menerapkan usulan perubahan bandwidth. Integrasi nyata belum diuji dalam tahap pembuatan source ini.
-
-Mikhmon belum dipasang dan konektor operasinya belum dibuat. Pemasangan Mikhmon baru serta fungsi voucher/cetak/laporan masih menjadi pekerjaan pengembangan. Membangun APK tidak otomatis menyelesaikan bagian tersebut.
+Buka [Actions di Clonework](https://github.com/ebsrccl/Clonework/actions), jalankan **Build APK MikroTik**, lalu unduh artefak **Mikrotik-Agent-Lokal-APK** setelah sukses. Ekstrak ZIP untuk APK dan checksum. Workflow juga berjalan saat source Android berubah pada branch `main`.

@@ -1,107 +1,51 @@
-# Mikrotik Automation System — Fondasi 0.1
+# MikroTik Agent Lokal — 0.2
 
-Fondasi source untuk aplikasi Android agen MikroTik. Pengguna belum mempunyai Mikhmon; pemasangan Mikhmon baru menjadi bagian tahap integrasi proyek.
+Agen Android yang berjalan di HP, tanpa VPS, server pendamping, localhost gateway, atau kode pemasangan. APK mengakses MikroTik secara langsung melalui RouterOS API. Pesan, hasil pembacaan router yang diperlukan, dan instruksi fungsi dikirim ke OpenAI melalui HTTPS; fungsi dan perubahan router dieksekusi di HP.
 
-**Status:** APK debug `0.1.0-foundation` berhasil dikompilasi pada 6 September 2026. Pengujian inti 12/12 dan pemeriksaan tanda tangan APK lulus. Server belum dipublikasikan, Mikhmon belum dipasang, dan router/OpenAI nyata belum diuji. Antarmuka Android belum dijalankan pada emulator/perangkat. Versi ini tersedia untuk uji coba awal.
+## Mulai
 
-**Mulai memakai APK:** unduh artefak **Mikrotik-Agent-APK** dari [build yang berhasil](https://github.com/ebsrccl/Clonework/actions/runs/34038044684), ekstrak ZIP, lalu pasang `Mikrotik-Agent-debug.apk` pada Android 8 atau lebih baru. Pilih **Lihat demo tanpa koneksi** untuk mencoba tampilan. Untuk mengoperasikan router, siapkan server agen HTTPS seperti petunjuk di bawah. [Petunjuk lengkap pemasangan](docs/CARA_PAKAI_APK.md).
+1. Pasang **Mikrotik-Agent-Lokal-0.2.apk**, lalu buka **MikroTik Agent Lokal**.
+2. Isi nama router, IP/hostname, port API, jenis koneksi, username, dan password MikroTik.
+3. Isi API key OpenAI milik sendiri serta model yang tersedia pada akun API, lalu tekan **Uji koneksi & simpan di HP**.
+4. Minta "cek status router" atau "tampilkan simple queue". Perubahan bandwidth disiapkan sebagai usulan di **Aktivitas** dan diterapkan melalui tombol pengguna.
 
-## Isi paket
+Tidak ada kolom server agen. Profil dan riwayat disimpan terenkripsi dengan AES-GCM dan Android Keystore, digunakan kembali saat aplikasi dibuka. APK tidak memuat key/password bawaan. Mode demo memakai data contoh dan tidak memanggil jaringan.
 
-- `android/`: aplikasi native Java, Android 8+, compile/target SDK 36. Layar pengaturan sekali masuk, chat, skill, aktivitas perubahan, dan demo lokal dengan label data contoh.
-- `server/`: Node.js 22+ tanpa dependensi npm eksternal. HTTP gateway pribadi, vault AES-256-GCM, sesi perangkat, Responses API, serta protokol RouterOS API-SSL.
-- `docs/`: spesifikasi produk, status validasi, dan pekerjaan integrasi Mikhmon berikutnya.
+[Petunjuk pemasangan dan koneksi](docs/CARA_PAKAI_APK.md) · [Spesifikasi lokal](docs/LOKAL_v0.2.md) · [Status validasi](docs/VALIDATION.md)
 
-## Kemampuan yang sudah ditulis
+## Koneksi langsung
 
-1. Menguji koneksi router dan akses model OpenAI, lalu menyimpan profil terenkripsi pada server.
-2. Menyimpan token perangkat menggunakan enkripsi dengan Android Keystore. API key dan password router tidak ditanam ke source/APK.
-3. Menggunakan OpenAI function calling dengan daftar fungsi khusus MikroTik. Tidak ada fungsi shell atau eksekusi perintah umum.
-4. Membaca identitas router, sumber daya, interface, profil hotspot, dan simple queue.
-5. Membuat usulan perubahan bandwidth satu simple queue. Pengguna menekan **Terapkan** pada objek yang ditinjau; server membaca keadaan terbaru, menolak usulan usang, menulis, kemudian memverifikasi target dan nilai.
-6. Menyimpan hasil tidak pasti dan mencegah pengulangan buta setelah perubahan atau sambungan terputus.
+HP harus dapat menjangkau alamat/port API MikroTik lewat Wi-Fi lokal, VPN yang sudah tersedia, atau alamat remote API-SSL. Alamat Winbox/web saja belum tentu menyediakan API pada port yang sama.
 
-Mikhmon, pembuatan voucher, PPPoE, firewall/NAT, backup/restore, penjadwalan, notifikasi, operasi multi-router, dan pemulihan otomatis belum diimplementasikan. Status ini juga tampil dalam aplikasi. Demo merupakan respons tetap dengan data contoh, bukan model OpenAI lokal.
+- **API-SSL:** port standar 8729, TLS 1.2/1.3 dengan sertifikat yang dipercaya Android dan cocok dengan hostname. Untuk sertifikat sendiri, pin SHA-256 sertifikat dapat dimasukkan dari sumber router yang tepercaya. APK tidak mematikan validasi sertifikat dan tidak mendukung TLS anonim tanpa sertifikat.
+- **API biasa:** port standar 8728, dipilih dengan menonaktifkan checkbox API-SSL. Password lewat koneksi ini tidak terenkripsi; pilihan ini dibatasi oleh aplikasi ke alamat LAN/VPN. Alamat publik harus menggunakan API-SSL. Tidak ada fallback otomatis dari TLS ke API biasa.
+- **OpenAI:** hanya `https://api.openai.com/v1/responses`. API key dikirim sebagai header autentikasi OpenAI. Profil/router password tidak dimasukkan dalam payload model. Field router yang dikembalikan dibatasi. Uji koneksi OpenAI memakai kuota API.
 
-## Menjalankan pengujian inti
+## Kemampuan versi lokal
 
-Prasyarat: Node.js 22 atau lebih baru. Tidak memerlukan API key, router, SDK Android, atau unduhan dependensi.
+- Membaca identitas/sumber daya, interface, profil hotspot, dan simple queue.
+- Membaca ringkasan langsung tanpa OpenAI melalui tab Skill setelah profil tersimpan.
+- Menyiapkan dan menerapkan perubahan `max-limit` pada satu simple queue statis, memeriksa keadaan sebelum menulis, dan memverifikasi baca ulang.
+- Menyimpan status sebelum mutasi; perubahan berstatus `applying`/`unknown` tidak dikirim ulang otomatis setelah gangguan atau restart.
+- Chat dan eksekusi fungsi lokal; maksimum enam putaran model, 16 fungsi, lima percakapan model, 30 pesan tampilan, dan 100 usulan tersimpan.
 
-```bash
-cd server
-node --test test/core.test.mjs
-```
+Mikhmon tidak dipasang dan konektor operasinya belum tersedia. Voucher, PPPoE, firewall/NAT, backup, dan tugas terjadwal belum diimplementasikan. Tugas berjalan di proses aplikasi; belum ada layanan latar belakang yang menjamin tugas terus berjalan ketika Android menghentikan aplikasi.
 
-Pengujian mencakup protokol data, vault, sesi HTTP, pembatasan fungsi, verifikasi perubahan, dan penanganan kondisi tidak pasti. Router dan OpenAI ditirukan, sementara vault dan server HTTP diuji secara nyata di localhost.
-
-## Menyiapkan server pengembangan
-
-```bash
-cd server
-node scripts/init.mjs
-node --env-file=.env src/server.mjs
-```
-
-`init.mjs` membuat `.env` berisi kunci enkripsi baru dan `SETUP_TOKEN` acak dengan izin berkas terbatas. Tidak menimpa konfigurasi yang sudah ada. Pertahankan kunci enkripsi agar vault lama tetap dapat dibaca. Berkas ini dan direktori `data/` tidak boleh dimasukkan ke source ZIP/git.
-
-Server mendengarkan di `127.0.0.1:8787`. Untuk HP jarak jauh, operator perlu menyiapkan HTTPS reverse proxy pada server yang dikelola sendiri. Server harus dapat menjangkau alamat remote dan port API-SSL router. Jangan meneruskan password/API key melalui HTTP publik. Belum ada reverse proxy, VPS, domain, atau sertifikat yang disiapkan oleh paket ini.
-
-API-SSL router harus sudah aktif dengan sertifikat yang dapat diverifikasi. Default port 8729; port remote dapat berbeda. Untuk CA pribadi, atur `ROUTER_CA_FILE` ke berkas CA PEM yang dipercaya pada server. Tidak ada opsi mematikan verifikasi sertifikat.
-
-### Pengaturan sekali pada aplikasi
-
-1. Alamat HTTPS server agen dan kode pemasangan `SETUP_TOKEN` dari operator server.
-2. Nama router, host remote, port API-SSL, username, dan password router.
-3. API key OpenAI serta ID model yang dapat dipakai akun. Isian awal model `gpt-5-mini` dapat diubah; ketersediaannya harus diuji dengan akun pengguna.
-
-Seluruhnya berada pada satu formulir. Kode pemasangan mengikat satu perangkat aktif dan tidak dapat dipakai menimpa sesi yang masih aktif. Koneksi yang tersimpan dipakai pada pembukaan berikutnya. Tidak ada formulir kredensial Mikhmon lama karena Mikhmon belum ada.
-
-Uji pengaturan membuat satu permintaan OpenAI nyata ketika dijalankan dengan key sendiri, sehingga termasuk penggunaan API. Tidak ada permintaan tersebut yang dijalankan dalam pengembangan paket ini.
-
-Android debug hanya mengizinkan HTTP untuk `10.0.2.2`, `127.0.0.1`, dan `localhost`. Emulator Android biasa dapat memakai `http://10.0.2.2:8787` untuk mengakses server pada host yang sama. Release membutuhkan HTTPS.
-
-Jika perangkat hilang atau aplikasi dipasang ulang, hentikan server, lalu jalankan dari direktori `server`:
-
-```bash
-node --env-file=.env scripts/reset-device.mjs
-```
-
-Mulai ulang server setelah itu. Token lama dicabut. Pengaturan baru dapat dilakukan dengan kode pemasangan. Perintah ini mempertahankan berkas vault; pengaturan baru yang berhasil akan mengganti profil pemilik tunggal sebelumnya. Jangan jalankan pemulihan ini bersama server yang masih aktif.
-
-## Membangun APK debug
-
-Memerlukan JDK 17, Gradle 8.13, Android SDK Platform 36, dan Android SDK Build Tools yang sesuai. Plugin Android yang dipakai adalah 8.13.2. Build pertama berhasil melalui GitHub Actions; lingkungan penyuntingan lokal tidak memiliki SDK Android/Gradle/JDK compiler.
-
-1. Buka direktori `android` melalui Android Studio dan sediakan dependensi SDK/Gradle.
-2. Tetapkan SDK lokal melalui Android Studio atau `local.properties` milik mesin sendiri.
-3. Dengan Gradle 8.13 terpasang, jalankan:
+## Build dan pengujian
 
 ```bash
 cd android
-gradle :app:assembleDebug
+gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-Lokasi hasil setelah build berhasil: `android/app/build/outputs/apk/debug/app-debug.apk`.
+JDK 17, Gradle 8.13, AGP 8.13.2, Android SDK 36; minimum Android 8/API 26. Source aplikasi memakai Java dan komponen Android native tanpa dependensi runtime eksternal. JUnit dan org.json hanya dependensi pengujian JVM.
 
-Paket tidak memuat Gradle wrapper binary. Jika diperlukan, buat wrapper menggunakan Gradle terpasang (`gradle wrapper --gradle-version 8.13`), lalu gunakan `./gradlew :app:assembleDebug`. APK release bertanda tangan dan distribusi belum disiapkan.
+Workflow GitHub Actions membangun **Mikrotik-Agent-Lokal-APK**, memeriksa tanda tangan, dan menyertakan `SHA256SUMS.txt`. APK debug ini memakai ID `id.mas.agent.local`, sehingga dapat dipasang berdampingan dengan APK gateway 0.1 tanpa konflik tanda tangan. Data versi lama tidak dimigrasikan otomatis. Penandatanganan rilis tetap belum disiapkan; build debug berikutnya dapat memerlukan pemasangan ulang jika kunci debug berubah.
 
-## Batas operasional fondasi
+Folder `server/` adalah implementasi gateway lama yang dipertahankan sebagai arsip kode. APK lokal 0.2 tidak menjalankan atau menghubunginya. `docs/SPESIFIKASI_v0.2.md` mencatat rancangan server sebelumnya; arsitektur aktif dijelaskan pada `docs/LOKAL_v0.2.md`.
 
-- Satu server pribadi, satu router, dan satu perangkat aktif. Tidak dirancang untuk layanan publik multi-pengguna.
-- Tugas chat berjalan interaktif; belum ada worker pekerjaan persisten atau scheduler yang melanjutkan proses setelah server mati.
-- Riwayat model dibatasi lima percakapan lengkap; tampilan menyimpan 30 pesan terakhir. Maksimum 100 usulan perubahan; pengarsipan belum dibuat.
-- Perubahan queue hanya mendukung `max-limit` pada simple queue statis. Usulan berlaku sepuluh menit. `applying`/`unknown` perlu pemeriksaan ulang oleh operator; tidak ada auto-retry.
-- Usulan perubahan memerlukan tombol penerapan di versi fondasi. Kebijakan tindakan rutin otomatis sesuai izin tetap menjadi pengembangan produk berikutnya.
-- Error HTTP kepada aplikasi dibuat umum agar kredensial tidak bocor; diagnosis koneksi lebih rinci masih perlu ditambahkan.
-- TLS RouterOS, perilaku model sebenarnya, UI Android, dan seluruh siklus integrasi harus diuji pada lingkungan milik pengguna sebelum penggunaan operasional.
+## Referensi
 
-## Rujukan implementasi
-
-- [OpenAI Function calling](https://developers.openai.com/api/docs/guides/function-calling)
-- [OpenAI Authentication](https://developers.openai.com/api/reference/overview#authentication)
-- [GPT-5 mini](https://developers.openai.com/api/docs/models/gpt-5-mini)
-- [RouterOS API](https://help.mikrotik.com/docs/spaces/ROS/pages/47579160/API)
-- [RouterOS Queues](https://help.mikrotik.com/docs/spaces/ROS/pages/328088/Queues)
-- [Android Gradle Plugin 8.13](https://developer.android.com/build/releases/agp-8-13-0-release-notes)
-- [Android Keystore](https://developer.android.com/privacy-and-security/keystore)
-- [Mikhmon resmi](https://github.com/laksa19/mikhmonv3)
+- [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
+- [Reasoning dan kelanjutan respons](https://developers.openai.com/api/docs/guides/reasoning)
+- [RouterOS API dan port layanan](https://help.mikrotik.com/docs/spaces/ROS/pages/47579160/API)

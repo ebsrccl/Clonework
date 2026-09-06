@@ -51,22 +51,22 @@ jobs:
       - name: Pastikan Android SDK tersedia
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"'
 
-      - name: Bangun APK debug
+      - name: Uji agen Android lokal dan bangun APK
         working-directory: android
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 
       - name: Periksa tanda tangan dan siapkan berkas
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-debug.apk
           mkdir -p output
-          cp android/app/build/outputs/apk/debug/app-debug.apk output/Mikrotik-Agent-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk output/Mikrotik-Agent-Lokal-0.2.apk
           cd output
-          sha256sum Mikrotik-Agent-debug.apk > SHA256SUMS.txt
+          sha256sum Mikrotik-Agent-Lokal-0.2.apk > SHA256SUMS.txt
 
       - name: Sediakan APK untuk diunduh
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: Mikrotik-Agent-APK
+          name: Mikrotik-Agent-Lokal-APK
           path: output/
           if-no-files-found: error
           retention-days: 14
