@@ -194,7 +194,7 @@ public class MainActivity extends Activity {
             if (message.length() > 3000) { setStatus("Pesan maksimal 3000 karakter."); return; }
             addMessage("user", message);
             if (demo) {
-                addMessage("assistant", message.toLowerCase().contains("mikhmon") ? "DEMO: Mikhmon belum dipasang. Konektor akan dikembangkan setelah layanannya disiapkan." :
+                addMessage("assistant", message.toLowerCase(java.util.Locale.ROOT).contains("mikhmon") ? "DEMO: Mikhmon belum dipasang. Konektor akan dikembangkan setelah layanannya disiapkan." :
                     "DATA CONTOH: Router utama · uptime 2 hari · CPU 8%. Ini simulasi tampilan, bukan pembacaan router atau respons OpenAI. Mode nyata dapat membaca data router dan menyiapkan perubahan bandwidth."); showMain(); return;
             }
             try {
