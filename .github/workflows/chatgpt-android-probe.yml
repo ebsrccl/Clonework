@@ -10,6 +10,9 @@ jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      ANDROID_AVD_HOME: ${{ github.workspace }}/.ci-avd
+      ANDROID_USER_HOME: ${{ github.workspace }}/.ci-android
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -35,7 +38,9 @@ jobs:
       - name: Prepare Android 15 emulator and build probe
         run: |
           sudo chmod a+rw /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-35;google_apis;x86_64' 'emulator'
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-35;google_apis;x86_64' 'emulator'
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n probe -k 'system-images;android-35;google_apis;x86_64' --force
           "$ANDROID_HOME/emulator/emulator" -avd probe -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/emulator.log 2>&1 &
           gradle -p android/probe --no-daemon assembleDebug
