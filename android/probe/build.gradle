@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' version '8.13.2' }
+android {
+    namespace 'id.mas.codexprobe'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'id.mas.codexprobe'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName 'probe'
+    }
+    packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += ['**/*.so'] } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
