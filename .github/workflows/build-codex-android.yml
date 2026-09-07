@@ -1,0 +1,145 @@
+name: Build native Codex for Android
+'on':
+  workflow_dispatch:
+  push:
+    branches: [chatgpt-local]
+    paths: ['.github/workflows/build-codex-android.yml', 'android/runtime/**']
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            abi: arm64-v8a
+          - target: x86_64-linux-android
+            abi: x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CODEX_ANDROID_TARGET: ${{ matrix.target }}
+      CODEX_ANDROID_ABI: ${{ matrix.abi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: openai/codex
+          ref: 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a
+          persist-credentials: false
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            codex-rs/target
+          key: codex-apk-native-01534-${{ matrix.abi }}-${{ github.sha }}
+          restore-keys: |
+            codex-apk-native-01534-${{ matrix.abi }}-
+            codex-android-01534-rust195-ndk27-
+      - name: Android build toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target "$CODEX_ANDROID_TARGET"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.2.12479018'
+      - name: Build executable using Android libc and vendored TLS
+        working-directory: codex-rs
+        run: |
+          cat >> app-server/Cargo.toml <<'ANDROID_CARGO'
+
+          [target.'cfg(target_os = "android")'.dependencies]
+          openssl-sys = { workspace = true, features = ["vendored"] }
+          ANDROID_CARGO
+          toolchain_bin="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          target_env="${CODEX_ANDROID_TARGET//-/_}"
+          target_upper="${target_env^^}"
+          export "CARGO_TARGET_${target_upper}_LINKER=$toolchain_bin/${CODEX_ANDROID_TARGET}26-clang"
+          export "CARGO_TARGET_${target_upper}_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384"
+          export "CC_${target_env}=$toolchain_bin/${CODEX_ANDROID_TARGET}26-clang"
+          export "AR_${target_env}=$toolchain_bin/llvm-ar"
+          export "RANLIB_${target_env}=$toolchain_bin/llvm-ranlib"
+          cargo +1.95.0 build --package codex-app-server --bin codex-app-server --target "$CODEX_ANDROID_TARGET"
+          mkdir -p "../native-output/jniLibs/$CODEX_ANDROID_ABI" ../native-output/licenses
+          cp "target/$CODEX_ANDROID_TARGET/debug/codex-app-server" "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
+          "$toolchain_bin/llvm-strip" --strip-unneeded "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
+          cp "$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/$CODEX_ANDROID_TARGET/libc++_shared.so" "../native-output/jniLibs/$CODEX_ANDROID_ABI/"
+          cp ../LICENSE ../NOTICE ../native-output/licenses/
+          cp Cargo.lock ../native-output/Cargo.lock
+          "$toolchain_bin/llvm-readelf" -l -d "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
+          cd ../native-output
+          printf '%s\n' 'OpenAI Codex 0.153.4; source 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a' 'Android build by Clonework; OpenSSL vendored; no auth or policy code changes' > BUILD_INFO.txt
+          sha256sum jniLibs/*/*.so > SHA256SUMS.txt
+      - name: Native executable artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: codex-android-${{ matrix.abi }}
+          path: native-output/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Save native compiler intermediates
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            codex-rs/target
+          key: codex-apk-native-01534-${{ matrix.abi }}-${{ github.sha }}
+  verify:
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ANDROID_AVD_HOME: ${{ github.workspace }}/.ci-avd
+      ANDROID_USER_HOME: ${{ github.workspace }}/.ci-android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: codex-android-x86_64
+          path: native-runtime
+      - name: Verify and package Android executable
+        run: |
+          cd native-runtime
+          sha256sum --check SHA256SUMS.txt
+          cd ..
+          cp -r native-runtime/jniLibs android/probe/src/main/
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '8.13'
+          cache-disabled: true
+      - name: Build and start Android emulator
+        run: |
+          sudo chmod a+rw /dev/kvm
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-35;google_apis;x86_64' 'emulator'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n probe -k 'system-images;android-35;google_apis;x86_64' --force
+          "$ANDROID_HOME/emulator/emulator" -avd probe -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/emulator.log 2>&1 &
+          gradle -p android --no-daemon :app:testDebugUnitTest
+          gradle -p android/probe --no-daemon assembleDebug
+      - name: Validate native startup and account protocol
+        run: |
+          adb wait-for-device
+          for attempt in $(seq 1 90); do
+            if adb shell getprop sys.boot_completed | tr -d '\r' | grep -q '^1$'; then break; fi
+            sleep 3
+          done
+          adb shell input keyevent 82
+          adb install android/probe/build/outputs/apk/debug/*.apk
+          adb shell am instrument -w id.mas.codexprobe/id.mas.codexprobe.Probe | tee /tmp/probe-result.txt
+          grep -q CODEX_ANDROID_PROBE_PASS /tmp/probe-result.txt
+      - name: Native runtime diagnostics
+        if: always()
+        run: |
+          adb logcat -d -s CodexProbe AndroidRuntime libc || true
+          adb logcat -d -b crash || true
+          adb shell run-as id.mas.codexprobe cat files/codex/stderr.txt || true
+          tail -20 /tmp/emulator.log || true
