@@ -22,7 +22,7 @@ public class LocalAgentTest {
     static JSONObject profile() throws Exception {
         return new JSONObject().put("router", new JSONObject().put("name", "Test router").put("host", "127.0.0.1").put("port", 8728)
             .put("tls", false).put("certificate_sha256", "").put("username", "test-user").put("password", "router-secret-test"))
-            .put("openai_key", "api-secret-test").put("model", "gpt-5-mini");
+            ;
     }
     static JSONObject args() throws Exception { return new JSONObject().put("queue_id", "*A").put("upload_mbps", 5).put("download_mbps", 10); }
     static class FakeRouter implements LocalAgent.Router {
@@ -33,7 +33,7 @@ public class LocalAgentTest {
         public JSONArray read(String path, String[] fields) throws Exception { return new JSONArray().put(new JSONObject(row.toString())); }
         public void setQueue(String id, String limit) throws Exception { writes++; if (failWrite) throw new IOException("uncertain"); row.put("max-limit", limit); if (changeTarget) row.put("target", "192.168.88.11/32"); }
     }
-    static LocalAgent engine(Memory memory, FakeRouter router) throws Exception { return new LocalAgent(memory, router, (key, payload) -> { throw new AssertionError("Unexpected OpenAI request"); }); }
+    static LocalAgent engine(Memory memory, FakeRouter router) throws Exception { return new LocalAgent(memory, router, (message, history, tools) -> { throw new AssertionError("Unexpected ChatGPT request"); }); }
     static String proposal(LocalAgent agent) throws Exception { return agent.execute("prepare_queue_limit", args()).getJSONObject("plan").getString("id"); }
     @Test public void queueProposalPersistsAndAppliesOnceAcrossRestart() throws Exception {
         Memory memory = new Memory(); FakeRouter router = new FakeRouter(); LocalAgent a = engine(memory, router);
@@ -77,40 +77,31 @@ public class LocalAgentTest {
         assertThrows(IOException.class, () -> LocalAgent.validateTool("prepare_queue_limit", args().put("download_mbps", 0)));
         assertEquals("1000000/2000000", LocalAgent.normalizeLimit("1M/2M"));
     }
-    static JSONObject done(String text) throws Exception {
-        return new JSONObject().put("id", "resp_test").put("status", "completed").put("output", new JSONArray().put(new JSONObject().put("type", "message")
-            .put("role", "assistant").put("content", new JSONArray().put(new JSONObject().put("type", "output_text").put("text", text)))));
-    }
-    @Test public void responsesLoopForwardsReasoningAndRedactsCredentials() throws Exception {
-        Memory memory = new Memory(); FakeRouter router = new FakeRouter(); router.row.put("name", "router-secret-test"); int[] count = {0};
-        LocalAgent agent = new LocalAgent(memory, router, (key, payload) -> {
-            assertEquals("api-secret-test", key);
-            assertFalse(payload.toString().contains("router-secret-test")); assertFalse(payload.toString().contains("api-secret-test"));
-            assertFalse(payload.getBoolean("store")); assertFalse(payload.has("router")); assertFalse(payload.has("gateway"));
-            if (count[0]++ == 0) return new JSONObject().put("status", "completed").put("output", new JSONArray()
-                .put(new JSONObject().put("type", "reasoning").put("id", "rs_test").put("summary", new JSONArray()).put("encrypted_content", "cipher-test"))
-                .put(new JSONObject().put("type", "function_call").put("call_id", "call_test").put("name", "list_simple_queues").put("arguments", "{}")));
-            assertTrue(payload.getJSONArray("input").toString().contains("cipher-test"));
-            assertTrue(payload.getJSONArray("input").toString().contains("function_call_output"));
-            return done("Ada satu queue.");
+    @Test public void chatGptToolsRedactRouterCredentialsAndKeepHistory() throws Exception {
+        Memory memory = new Memory(); FakeRouter router = new FakeRouter(); router.row.put("name", "router-secret-test");
+        LocalAgent agent = new LocalAgent(memory, router, (message, history, tools) -> {
+            assertFalse(message.contains("router-secret-test"));
+            JSONObject result = tools.run("list_simple_queues", new JSONObject());
+            assertFalse(result.toString().contains("router-secret-test"));
+            return "Ada satu queue.";
         });
-        JSONObject result = agent.chat("Cek queue. api-secret-test router-secret-test");
-        assertEquals(2, count[0]); assertEquals(0, router.writes); assertEquals(2, result.getJSONArray("messages").length());
-        assertFalse(result.toString().contains("api-secret-test"));
+        JSONObject result = agent.chat("Cek queue router-secret-test");
+        assertEquals(0, router.writes); assertEquals(2, result.getJSONArray("messages").length());
+        assertFalse(result.toString().contains("router-secret-test"));
         assertEquals(2, engine(memory, router).snapshot().getJSONArray("messages").length());
     }
     @Test public void modelCannotApplyOrRunArbitraryCommands() throws Exception {
-        Memory memory = new Memory(); FakeRouter router = new FakeRouter(); int[] n = {0};
-        LocalAgent a = new LocalAgent(memory, router, (key, payload) -> {
-            if (n[0]++ == 0) return new JSONObject().put("output", new JSONArray().put(new JSONObject().put("type", "function_call").put("call_id", "bad")
-                .put("name", "setQueue").put("arguments", "{\"command\":\"/system/reboot\"}")));
-            assertTrue(payload.toString().contains("parameter ditolak")); return done("Fungsi tidak tersedia.");
+        Memory memory = new Memory(); FakeRouter router = new FakeRouter();
+        LocalAgent agent = new LocalAgent(memory, router, (message, history, tools) -> {
+            assertThrows(IOException.class, () -> tools.run("setQueue", new JSONObject().put("command", "/system/reboot")));
+            assertThrows(IOException.class, () -> tools.run("apply", new JSONObject().put("id", "anything")));
+            return "Fungsi tidak tersedia.";
         });
-        a.chat("Jalankan fungsi"); assertEquals(0, router.writes);
+        agent.chat("Jalankan fungsi"); assertEquals(0, router.writes);
     }
-    @Test public void snapshotCannotExposeKeyOrModifyStoredProposal() throws Exception {
+    @Test public void snapshotCannotExposeCredentialsOrModifyStoredProposal() throws Exception {
         Memory memory = new Memory(); LocalAgent a = engine(memory, new FakeRouter()); proposal(a);
-        JSONObject snapshot = a.snapshot(); assertFalse(snapshot.has("router")); assertFalse(snapshot.has("openai_key"));
+        JSONObject snapshot = a.snapshot(); assertFalse(snapshot.has("router")); assertFalse(snapshot.toString().contains("router-secret-test"));
         snapshot.getJSONArray("plans").getJSONObject(0).put("status", "verified");
         assertEquals("pending", a.snapshot().getJSONArray("plans").getJSONObject(0).getString("status"));
     }

@@ -1,86 +1,137 @@
-name: Build APK MikroTik
-
+name: Build APK MikroTik ChatGPT
 'on':
   workflow_dispatch:
   push:
-    branches: [main]
-    paths:
-      - 'android/**'
-      - 'server/**'
-      - '.github/workflows/build-apk.yml'
-
+    branches: [main, chatgpt-local]
+    paths: ['android/app/**', 'android/codex-runtime.json', '.github/workflows/build-apk.yml']
 permissions:
   contents: read
-
+  actions: read
 concurrency:
-  group: build-apk-${{ github.ref }}
+  group: chatgpt-apk-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
+    env:
+      ANDROID_AVD_HOME: ${{ github.workspace }}/.ci-avd
+      ANDROID_USER_HOME: ${{ github.workspace }}/.ci-android
     steps:
-      - name: Ambil kode proyek
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
-      - name: Siapkan Node.js untuk pengujian inti
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - name: Verify pinned runtime identity
+        id: runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          config = json.load(open('android/codex-runtime.json'))
+          base = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + str(config['run_id'])
+          def get(url):
+              request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              return json.load(urllib.request.urlopen(request))
+          run = get(base)
+          assert run['head_sha'] == config['build_commit']
+          for attempt in range(60):
+              jobs = [j for j in get(base + '/jobs')['jobs'] if j['name'].startswith('native (')]
+              if len(jobs) == 2 and all(j['status'] == 'completed' for j in jobs): break
+              time.sleep(20)
+          assert len(jobs) == 2 and all(j['conclusion'] == 'success' for j in jobs)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('run_id=' + str(config['run_id']) + '\n')
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          node-version: '24'
-          package-manager-cache: false
-
-      - name: Uji inti agen dengan data tiruan
-        working-directory: server
-        run: node --test test/core.test.mjs
-
-      - name: Siapkan Java 17
-        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
+          pattern: codex-android-*
+          path: native-runtime
+          run-id: ${{ steps.runtime.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Package verified Android runtime
+        run: |
+          mkdir -p android/app/src/main/jniLibs android/app/src/main/assets/codex-notices
+          for package in native-runtime/codex-android-*; do
+            (cd "$package" && sha256sum --check SHA256SUMS.txt)
+            cp -r "$package"/jniLibs/* android/app/src/main/jniLibs/
+            cp "$package"/licenses/* "$package"/BUILD_INFO.txt android/app/src/main/assets/codex-notices/
+          done
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Siapkan Gradle 8.13
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
         with:
           gradle-version: '8.13'
           cache-disabled: true
-
-      - name: Pastikan Android SDK tersedia
-        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"'
-
-      - name: Uji agen Android lokal dan bangun APK
+      - name: Prepare Android emulator
+        run: |
+          sudo chmod a+rw /dev/kvm
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'platforms;android-36' 'build-tools;35.0.0' 'system-images;android-35;google_apis;x86_64' 'emulator'
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n agent -k 'system-images;android-35;google_apis;x86_64' --force
+          "$ANDROID_HOME/emulator/emulator" -avd agent -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > /tmp/emulator.log 2>&1 &
+      - name: Test and build APK
         working-directory: android
-        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
-
-      - name: Laporkan hasil pengujian dan kompatibilitas Android
+        run: gradle --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Verify native ChatGPT login start cancel and restart
+        run: |
+          adb wait-for-device
+          for attempt in $(seq 1 90); do
+            if adb shell getprop sys.boot_completed | tr -d '\r' | grep -q '^1$'; then break; fi
+            sleep 3
+          done
+          adb shell input keyevent 82
+          adb shell wm size 1080x2400
+          adb shell wm density 420
+          adb install android/app/build/outputs/apk/debug/app-x86_64-debug.apk
+          adb install android/app/build/outputs/apk/androidTest/debug/*.apk
+          adb shell am instrument -w id.mas.agent.chatgpt.test/id.mas.agent.SmokeProbe | tee /tmp/login-protocol.txt
+          grep -q CHATGPT_ANDROID_LOGIN_PROTOCOL_PASS /tmp/login-protocol.txt
+      - name: Inspect login screen and prepare signed APK
+        run: |
+          mkdir -p output validation
+          adb shell am start -n id.mas.agent.chatgpt/id.mas.agent.MainActivity
+          sleep 8
+          adb shell uiautomator dump /sdcard/agent-window.xml
+          adb pull /sdcard/agent-window.xml validation/login-window.xml
+          adb exec-out screencap -p > validation/ChatGPT-Login.png
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('validation/login-window.xml').read_text()
+          assert 'Akun ChatGPT' in text and 'API key OpenAI' not in text
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk output/Mikrotik-Agent-ChatGPT-0.3-ARM64.apk
+          cd output
+          sha256sum Mikrotik-Agent-ChatGPT-0.3-ARM64.apk > SHA256SUMS.txt
+      - name: Test reports and runtime diagnostics
         if: always()
         run: |
-          python3 - <<'PYREPORT'
+          python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
           base = Path('android/app/build')
-          for report in base.glob('intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt'):
-              print(report.read_text())
           for report in base.glob('test-results/testDebugUnitTest/TEST-*.xml'):
               suite = ET.parse(report).getroot()
-              print('ANDROID_TEST_RESULT', {k: suite.get(k) for k in ['name', 'tests', 'failures', 'errors', 'skipped']})
-          PYREPORT
-
-      - name: Periksa tanda tangan dan siapkan berkas
-        run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-debug.apk
-          mkdir -p output
-          cp android/app/build/outputs/apk/debug/app-debug.apk output/Mikrotik-Agent-Lokal-0.2.apk
-          cd output
-          sha256sum Mikrotik-Agent-Lokal-0.2.apk > SHA256SUMS.txt
-
-      - name: Sediakan APK untuk diunduh
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              print('ANDROID_TEST_RESULT', {k: suite.get(k) for k in ['name','tests','failures','errors','skipped']})
+              for failure in suite.iter('failure'): print(failure.text)
+          for report in base.glob('intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt'):
+              print(report.read_text())
+          PY
+          adb logcat -d -s ChatGptSmoke AndroidRuntime || true
+          adb logcat -d -b crash || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: Mikrotik-Agent-Lokal-APK
+          name: Mikrotik-Agent-ChatGPT-APK
           path: output/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ChatGPT-Android-Validation
+          path: validation/
           if-no-files-found: error
           retention-days: 14

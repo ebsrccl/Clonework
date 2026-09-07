@@ -75,6 +75,7 @@ final class CodexRpc implements AutoCloseable {
         if (failure != null) throw new IOException("Proses agen lokal terputus.");
         if (closed) throw new IOException("Proses agen lokal sudah ditutup.");
     }
+    boolean isOpen() { return !closed && failure == null; }
 
     static byte[] readPacket(InputStream input) throws IOException {
         ByteArrayOutputStream packet = new ByteArrayOutputStream();

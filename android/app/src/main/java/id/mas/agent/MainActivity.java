@@ -1,6 +1,8 @@
 package id.mas.agent;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
 import android.graphics.Color;
@@ -22,6 +24,10 @@ public class MainActivity extends Activity {
         TEXT = Color.rgb(232, 240, 248), MUTED = Color.rgb(145, 162, 184), ACCENT = Color.rgb(73, 218, 197);
     private static final ExecutorService worker = Executors.newSingleThreadExecutor();
     private static LocalAgent sharedAgent;
+    private static CodexBrain sharedBrain;
+    private CodexBrain brain;
+    private JSONObject chatGptAccount = new JSONObject();
+    private TextView loginStatus;
     private LocalAgent agent;
     private SecureSession storage;
     private JSONObject session;
@@ -40,16 +46,20 @@ public class MainActivity extends Activity {
         storage = new SecureSession(getApplicationContext());
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         try {
-            if (sharedAgent == null) sharedAgent = new LocalAgent(storage);
+            if (sharedBrain == null) sharedBrain = new CodexBrain(getApplicationContext());
+            brain = sharedBrain;
+            if (sharedAgent == null) sharedAgent = new LocalAgent(storage, brain);
             agent = sharedAgent;
         } catch (Exception error) { statusText = "Data lokal tidak dapat dibaca. Gunakan Hapus data lokal untuk mengatur ulang."; }
         if (agent == null) { showSetup(); return; }
         base();
         perform(() -> {
             JSONObject profile = agent.profileSummary();
-            return new JSONObject().put("profile", profile == null ? JSONObject.NULL : profile).put("snapshot", agent.snapshot());
+            JSONObject account;
+            try { account = brain.account(); } catch (Exception e) { account = new JSONObject().put("signed_in", false).put("error", e.getMessage()); }
+            return new JSONObject().put("profile", profile == null ? JSONObject.NULL : profile).put("snapshot", agent.snapshot()).put("account", account);
         }, result -> {
-            session = result.optJSONObject("profile"); loadSnapshot(result.getJSONObject("snapshot"));
+            session = result.optJSONObject("profile"); chatGptAccount = result.getJSONObject("account"); loadSnapshot(result.getJSONObject("snapshot"));
             if (session == null) showSetup(); else showMain();
         });
     }
@@ -86,7 +96,7 @@ public class MainActivity extends Activity {
         });
         setContentView(root);
         root.addView(text("MIKROTIK AUTOMATION SYSTEM", 10, ACCENT, true)); space(root, 7);
-        root.addView(text("MikroTik Agent Lokal", 26, TEXT, true)); space(root, 5);
+        root.addView(text("MikroTik Agent · ChatGPT", 24, TEXT, true)); space(root, 5);
         status = text(statusText, 12, MUTED, false); root.addView(status); space(root, 16);
     }
     private LinearLayout scroll(LinearLayout parent) {
@@ -107,11 +117,12 @@ public class MainActivity extends Activity {
         base();
         LinearLayout content = scroll(root), intro = card(content);
         intro.addView(text("Agen di HP. Tanpa VPS.", 20, TEXT, true)); space(intro, 9);
-        intro.addView(text("HP terhubung langsung ke MikroTik. OpenAI memproses pesan dan data router yang diminta. Profil disimpan terenkripsi di HP.", 14, MUTED, false));
+        intro.addView(text("HP terhubung langsung ke MikroTik. ChatGPT memproses pesan dan data router yang diminta. Password router dienkripsi; sesi ChatGPT disimpan di ruang privat APK.", 14, MUTED, false));
         content.addView(button("Lihat demo tanpa koneksi", false, () -> {
             if (busy) return; demo = true; tab = 0; plans = new JSONArray(); messages = new JSONArray();
-            addMessage("assistant", "MODE DEMO: data contoh. Tidak tersambung ke MikroTik atau OpenAI."); showMain();
+            addMessage("assistant", "MODE DEMO: data contoh. Tidak tersambung ke MikroTik atau ChatGPT."); showMain();
         })); space(content, 16);
+        addAccountCard(content);
         LinearLayout router = card(content); router.addView(text("Koneksi MikroTik", 18, TEXT, true)); space(router, 10);
         EditText name = field(router, "Nama router", "Router utama", false, "Router utama");
         EditText host = field(router, "IP / hostname MikroTik", "192.168.88.1 atau host remote", false, "");
@@ -123,35 +134,75 @@ public class MainActivity extends Activity {
         EditText password = field(router, "Password MikroTik", "Password router", true, "");
         EditText fingerprint = field(router, "SHA-256 sertifikat (opsional)", "Untuk sertifikat router yang ditentukan sendiri", false, "");
         router.addView(text("Kosongkan jika sertifikat dipercaya Android dan sesuai hostname. Untuk sertifikat sendiri, masukkan sidik jari SHA-256 yang diperoleh dari router secara tepercaya.", 12, MUTED, false));
-        LinearLayout brain = card(content); brain.addView(text("OpenAI", 18, TEXT, true)); space(brain, 10);
-        EditText key = field(brain, "API key OpenAI", "Key milik Boss", true, "");
-        EditText model = field(brain, "Model", "ID model sesuai akses API", false, "gpt-5-mini");
-        brain.addView(text("Key dipakai langsung ke api.openai.com. Password router tetap di HP. Uji koneksi membuat permintaan OpenAI menggunakan kuota API.", 12, MUTED, false));
         content.addView(button("Uji koneksi & simpan di HP", true, () -> {
             if (busy) return;
             try {
                 if (agent == null) throw new Exception("Data lokal tidak dapat dibaca. Hapus data lokal untuk mengatur ulang.");
                 JSONObject r = new JSONObject().put("name", value(name)).put("host", value(host)).put("port", Integer.parseInt(value(port)))
                     .put("tls", tls.isChecked()).put("certificate_sha256", value(fingerprint)).put("username", value(username)).put("password", password.getText().toString());
-                JSONObject data = new JSONObject().put("router", r).put("openai_key", value(key)).put("model", value(model));
+                JSONObject data = new JSONObject().put("router", r);
                 LocalAgent.validateConfig(data);
-                perform(() -> agent.setup(data), saved -> {
-                    session = saved; demo = false; tab = 0; messages = new JSONArray(); plans = new JSONArray(); key.setText(""); password.setText(""); showMain();
-                    setStatus("Koneksi MikroTik dan OpenAI diuji. Profil tersimpan di HP.");
+                perform(() -> { brain.requireAccount(); return agent.setup(data); }, saved -> {
+                    session = saved; demo = false; tab = 0; messages = new JSONArray(); plans = new JSONArray(); password.setText(""); showMain();
+                    setStatus("Koneksi MikroTik diuji. Akun ChatGPT terhubung dan profil tersimpan di HP.");
                 });
             } catch (NumberFormatException error) { setStatus("Isi port API dengan angka 1–65535."); }
             catch (Exception error) { setStatus(error.getMessage()); }
         })); space(content, 14);
         if (agent == null) content.addView(button("Hapus data lokal yang tidak terbaca", false, this::confirmClear));
     }
+    private String accountLabel() {
+        if (chatGptAccount.optBoolean("signed_in")) return "Terhubung: " + chatGptAccount.optString("email") + " · " + chatGptAccount.optString("plan");
+        return chatGptAccount.optString("error", "Belum login ChatGPT.");
+    }
+    private void addAccountCard(LinearLayout content) {
+        LinearLayout account = card(content); account.addView(text("Akun ChatGPT", 18, TEXT, true)); space(account, 9);
+        loginStatus = text(accountLabel(), 13, ACCENT, false); account.addView(loginStatus); space(account, 10);
+        account.addView(text("Masuk melalui browser resmi OpenAI. Kembali ke APK lalu tekan Periksa login. Pemakaian mengikuti akses dan kuota Codex akun Boss.", 13, MUTED, false)); space(account, 12);
+        if (!chatGptAccount.optBoolean("signed_in")) {
+            account.addView(button("Login ChatGPT", true, this::beginLogin)); space(account, 10);
+            account.addView(button("Periksa login", false, this::checkLogin));
+        } else {
+            account.addView(button("Keluar akun ChatGPT", false, () -> {
+                if (busy) return;
+                perform(() -> { try { brain.logout(); return new JSONObject(); } finally { stopService(new Intent(this, AgentService.class)); } }, result -> {
+                    chatGptAccount = new JSONObject(); if (session == null) showSetup(); else showMain(); setStatus("Akun ChatGPT sudah keluar dari APK.");
+                });
+            }));
+        }
+    }
+    private void beginLogin() {
+        if (busy) return;
+        try {
+            startForegroundService(new Intent(this, AgentService.class));
+            perform(() -> { try { return brain.login(); } catch (Exception e) { stopService(new Intent(this, AgentService.class)); throw e; } }, result -> {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(result.getString("auth_url"))).addCategory(Intent.CATEGORY_BROWSABLE));
+                setStatus("Selesaikan login di browser. Kembali ke APK lalu tekan Periksa login.");
+            });
+        } catch (Exception e) { setStatus("Browser atau layanan login tidak dapat dibuka."); }
+    }
+    private void checkLogin() {
+        if (busy) return;
+        perform(() -> brain.account(), result -> {
+            chatGptAccount = result;
+            if (loginStatus != null) loginStatus.setText(accountLabel());
+            if (result.optBoolean("signed_in")) {
+                stopService(new Intent(this, AgentService.class));
+                setStatus("Login ChatGPT berhasil. Profil router dapat disimpan atau chat dapat dimulai.");
+                // Keep any router fields the user has already entered.
+                if (session != null) showMain();
+            } else setStatus("Login belum selesai. Selesaikan halaman browser lalu periksa lagi.");
+        });
+    }
     private void confirmClear() {
         if (busy) return;
         new android.app.AlertDialog.Builder(this).setTitle("Hapus profil dan riwayat di HP?")
-            .setMessage("Kredensial serta riwayat lokal dihapus. Perubahan yang sudah diterapkan pada MikroTik tetap berlaku.")
+            .setMessage("Profil router, akun ChatGPT, dan riwayat dihapus dari HP. Perubahan yang sudah diterapkan pada MikroTik tetap berlaku.")
             .setNegativeButton("Batal", null).setPositiveButton("Hapus data lokal", (dialog, which) -> perform(() -> {
+                brain.clearAll(); stopService(new Intent(this, AgentService.class));
                 if (agent != null) agent.clear(); else storage.clear();
-                sharedAgent = new LocalAgent(storage); agent = sharedAgent; return new JSONObject();
-            }, result -> { session = null; demo = false; messages = new JSONArray(); plans = new JSONArray(); statusText = "Data lokal dihapus."; showSetup(); })).show();
+                sharedAgent = new LocalAgent(storage, brain); agent = sharedAgent; return new JSONObject();
+            }, result -> { session = null; chatGptAccount = new JSONObject(); demo = false; messages = new JSONArray(); plans = new JSONArray(); statusText = "Data lokal dihapus."; showSetup(); })).show();
     }
     private void setStatus(String value) { statusText = value; if (status != null) status.setText(value); }
     private void showMain() {
@@ -173,6 +224,7 @@ public class MainActivity extends Activity {
     }
     private void showChat() {
         LinearLayout content = scroll(root);
+        if (!demo && !chatGptAccount.optBoolean("signed_in")) addAccountCard(content);
         if (messages.length() == 0) {
             LinearLayout welcome = card(content); welcome.addView(text("Apa yang ingin diperiksa?", 20, TEXT, true)); space(welcome, 10);
             welcome.addView(text("Cek status router, daftar interface, profil hotspot, atau batas bandwidth.", 14, MUTED, false));
@@ -195,10 +247,11 @@ public class MainActivity extends Activity {
             addMessage("user", message);
             if (demo) {
                 addMessage("assistant", message.toLowerCase(java.util.Locale.ROOT).contains("mikhmon") ? "DEMO: Mikhmon belum dipasang. Konektor akan dikembangkan setelah layanannya disiapkan." :
-                    "DATA CONTOH: Router utama · uptime 2 hari · CPU 8%. Ini simulasi tampilan, bukan pembacaan router atau respons OpenAI. Mode nyata dapat membaca data router dan menyiapkan perubahan bandwidth."); showMain(); return;
+                    "DATA CONTOH: Router utama · uptime 2 hari · CPU 8%. Ini simulasi tampilan, bukan pembacaan router atau respons ChatGPT. Mode nyata dapat membaca data router dan menyiapkan perubahan bandwidth."); showMain(); return;
             }
             try {
-                perform(() -> agent.chat(message), result -> {
+                startForegroundService(new Intent(this, AgentService.class));
+                perform(() -> { try { return agent.chat(message); } finally { stopService(new Intent(this, AgentService.class)); } }, result -> {
                     messages = result.getJSONArray("messages"); plans = result.getJSONArray("plans"); showMain();
                 }); showMain();
             } catch (Exception error) { setStatus("Pesan tidak dapat disiapkan."); }
@@ -207,13 +260,14 @@ public class MainActivity extends Activity {
     }
     private void showSkills() {
         LinearLayout content = scroll(root);
+        if (!demo) addAccountCard(content);
         String[][] skills = {{"Monitoring router", "Identitas, sumber daya, interface, dan profil hotspot."},
             {"Bandwidth", "Baca queue, tinjau perubahan, terapkan, lalu periksa hasil."},
             {"Mikhmon · belum tersedia", "Aplikasi ini memakai RouterOS API langsung. Konektor Mikhmon belum dibuat."},
             {"Modul lanjutan · belum tersedia", "Voucher, PPPoE, firewall, NAT, backup, dan penjadwalan belum diimplementasikan."}};
         for (String[] skill : skills) { LinearLayout v = card(content); v.addView(text(skill[0], 17, TEXT, true)); space(v, 8); v.addView(text(skill[1], 14, MUTED, false)); }
         if (!demo) {
-            content.addView(button("Cek router langsung · tanpa OpenAI", false, () -> {
+            content.addView(button("Cek router langsung · tanpa ChatGPT", false, () -> {
                 if (busy) return;
                 perform(() -> agent.execute("router_summary", new JSONObject()), result -> {
                     tab = 0; addMessage("assistant", "Pembacaan langsung dari MikroTik:\n" + result.toString(2)); showMain();
@@ -272,7 +326,7 @@ public class MainActivity extends Activity {
                 final JSONObject refreshed = latest;
                 runOnUiThread(() -> { if (destroyed) return; busy = false;
                     if (!demo && session != null && refreshed != null) { loadSnapshot(refreshed); showMain(); }
-                    setStatus(error.getMessage() == null ? "Tugas gagal. Periksa jaringan HP, MikroTik, dan OpenAI." : error.getMessage());
+                    setStatus(error.getMessage() == null ? "Tugas gagal. Periksa jaringan HP, MikroTik, dan ChatGPT." : error.getMessage());
                 });
             }
         });
