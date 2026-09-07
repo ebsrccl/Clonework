@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
             return new JSONObject().put("profile", profile == null ? JSONObject.NULL : profile).put("snapshot", agent.snapshot()).put("account", account);
         }, result -> {
             session = result.optJSONObject("profile"); chatGptAccount = result.getJSONObject("account"); loadSnapshot(result.getJSONObject("snapshot"));
+            statusText = chatGptAccount.optBoolean("signed_in") ? "Akun ChatGPT terhubung." : "Siap. Login ChatGPT untuk mulai.";
             if (session == null) showSetup(); else showMain();
         });
     }
