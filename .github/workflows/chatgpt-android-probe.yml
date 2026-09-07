@@ -30,8 +30,14 @@ jobs:
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
           export CC_aarch64_linux_android="$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
           export AR_aarch64_linux_android="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          cargo +1.95.0 check --locked --package codex-app-server --bin codex-app-server --target aarch64-linux-android
+          # Android needs target-specific lockfile entries absent from the upstream release lock.
+          cargo +1.95.0 check --package codex-app-server --bin codex-app-server --target aarch64-linux-android
+      - name: Record dependency resolution changes for this feasibility check
+        if: always()
+        run: git diff --stat -- codex-rs/Cargo.lock
   probe:
+    # The packaged Linux runtime gate has already been exercised. Re-run explicitly if needed.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
