@@ -54,7 +54,13 @@ public final class Probe extends Instrumentation {
             finish(-1, result);
         } catch (Exception error) {
             Log.e("CodexProbe", "CODEX_ANDROID_PROBE_FAIL", error);
-            result.putString("stream", "CODEX_ANDROID_PROBE_FAIL " + error + "\n");
+            String exit = "not-exited";
+            if (process != null) {
+                try { if (process.waitFor(2, TimeUnit.SECONDS)) exit = Integer.toString(process.exitValue()); }
+                catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            }
+            Log.e("CodexProbe", "NATIVE_EXIT=" + exit);
+            result.putString("stream", "CODEX_ANDROID_PROBE_FAIL native_exit=" + exit + " " + error + "\n");
             finish(0, result);
         } finally {
             if (process != null) process.destroy();

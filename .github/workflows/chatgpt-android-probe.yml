@@ -7,6 +7,30 @@ name: Verify ChatGPT runtime on Android
 permissions:
   contents: read
 jobs:
+  native-android-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - name: Read pinned official Codex source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: openai/codex
+          ref: 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a
+          persist-credentials: false
+      - name: Prepare Rust and Android NDK
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.2.12479018'
+      - name: Check native Android compilation without modifying upstream code
+        working-directory: codex-rs
+        run: |
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+          export CC_aarch64_linux_android="$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
+          export AR_aarch64_linux_android="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          cargo +1.95.0 check --locked --package codex-app-server --bin codex-app-server --target aarch64-linux-android
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -59,5 +83,7 @@ jobs:
         if: always()
         run: |
           adb logcat -d -s CodexProbe AndroidRuntime libc || true
+          adb logcat -d -b crash || true
+          adb logcat -d -b all | grep -E 'seccomp|SIGSYS|libcodex|Fatal signal' || true
           adb shell run-as id.mas.codexprobe cat files/codex/stderr.txt || true
           tail -30 /tmp/emulator.log || true
