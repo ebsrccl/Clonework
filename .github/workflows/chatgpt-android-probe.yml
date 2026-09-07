@@ -52,7 +52,7 @@ jobs:
             sleep 3
           done
           adb shell input keyevent 82
-          adb install android/probe/build/outputs/apk/debug/probe-debug.apk
+          adb install android/probe/build/outputs/apk/debug/*.apk
           adb shell am instrument -w id.mas.codexprobe/id.mas.codexprobe.Probe | tee /tmp/probe-result.txt
           grep -q CODEX_ANDROID_PROBE_PASS /tmp/probe-result.txt
       - name: Runtime diagnostics
