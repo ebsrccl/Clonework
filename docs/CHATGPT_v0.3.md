@@ -39,3 +39,5 @@ Identitas aplikasi: `id.mas.agent.chatgpt`, versi `0.3.0-chatgpt-preview`, targe
 Sumber runtime: OpenAI Codex 0.153.4, commit `3d2ee51ca2d5db578f328aa75e20aa22c0197c9a`. Dibangun dengan Android NDK 27.2, Rust 1.95, OpenSSL vendored, dan dukungan `flock` Android pada pustaka standar Rust. Mekanisme autentikasi dan kebijakan Codex tidak diubah. Lisensi dan pemberitahuan Codex ikut dikemas di APK. Workflow native menyimpan Cargo.lock hasil resolusi dan checksum binari; `android/codex-runtime.json` menunjuk build runtime yang digunakan.
 
 Uji otomatis menggunakan router/protokol AI tiruan serta emulator Android untuk startup runtime dan awal/pembatalan login browser. Penyelesaian OAuth dengan akun pengguna, percakapan AI berbayar/berkuota, dan perubahan pada MikroTik fisik memerlukan pengujian di perangkat pengguna. Lihat hasil build terkait sebelum memakai APK; keberhasilan kompilasi saja bukan bukti login berhasil.
+
+Hasil terperinci: [CHATGPT_VALIDATION.md](CHATGPT_VALIDATION.md).
