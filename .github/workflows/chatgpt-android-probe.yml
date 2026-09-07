@@ -20,21 +20,47 @@ jobs:
           repository: openai/codex
           ref: 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a
           persist-credentials: false
+      - name: Restore Android compiler intermediates
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            codex-rs/target
+          key: codex-android-01534-rust195-ndk27-${{ github.sha }}
+          restore-keys: codex-android-01534-rust195-ndk27-
       - name: Prepare Rust and Android NDK
         run: |
           rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.2.12479018'
-      - name: Check native Android compilation without modifying upstream code
+      - name: Enable source-built OpenSSL for the Android target
+        working-directory: codex-rs
+        run: |
+          cat >> app-server/Cargo.toml <<'ANDROID_CARGO'
+
+          [target.'cfg(target_os = "android")'.dependencies]
+          openssl-sys = { workspace = true, features = ["vendored"] }
+          ANDROID_CARGO
+      - name: Check native Android compilation
         working-directory: codex-rs
         run: |
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
           export CC_aarch64_linux_android="$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
           export AR_aarch64_linux_android="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
-          # Android needs target-specific lockfile entries absent from the upstream release lock.
+          # The released workspace requires dependency re-resolution for this check.
           cargo +1.95.0 check --package codex-app-server --bin codex-app-server --target aarch64-linux-android
       - name: Record dependency resolution changes for this feasibility check
         if: always()
         run: git diff --stat -- codex-rs/Cargo.lock
+      - name: Save compiler intermediates for subsequent compatibility fixes
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            codex-rs/target
+          key: codex-android-01534-rust195-ndk27-${{ github.sha }}
   probe:
     # The packaged Linux runtime gate has already been exercised. Re-run explicitly if needed.
     if: github.event_name == 'workflow_dispatch'
