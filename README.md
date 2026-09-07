@@ -1,3 +1,5 @@
+> **Pengembangan terbaru: versi ChatGPT lokal 0.3** ada di branch [`chatgpt-local`](https://github.com/ebsrccl/Clonework/tree/chatgpt-local). Panduan: [CHATGPT_v0.3.md](docs/CHATGPT_v0.3.md). Versi ini mengganti API key dengan login ChatGPT melalui runtime Codex di HP. Masih preview; Mikhmon belum terintegrasi.
+
 # MikroTik Agent Lokal — 0.2
 
 Agen Android yang berjalan di HP, tanpa VPS, server pendamping, localhost gateway, atau kode pemasangan. APK mengakses MikroTik secara langsung melalui RouterOS API. Pesan, hasil pembacaan router yang diperlukan, dan instruksi fungsi dikirim ke OpenAI melalui HTTPS; fungsi dan perubahan router dieksekusi di HP.
