@@ -47,6 +47,10 @@ jobs:
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
           export CC_aarch64_linux_android="$CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER"
           export AR_aarch64_linux_android="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export RANLIB_aarch64_linux_android="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
+          mkdir -p "$RUNNER_TEMP/android-tool-aliases"
+          ln -sf "$RANLIB_aarch64_linux_android" "$RUNNER_TEMP/android-tool-aliases/aarch64-linux-android-ranlib"
+          export PATH="$RUNNER_TEMP/android-tool-aliases:$PATH"
           # The released workspace requires dependency re-resolution for this check.
           cargo +1.95.0 check --package codex-app-server --bin codex-app-server --target aarch64-linux-android
       - name: Record dependency resolution changes for this feasibility check
