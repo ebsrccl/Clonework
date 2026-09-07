@@ -2,6 +2,8 @@
 
 Agen Android yang berjalan di HP, tanpa VPS, server pendamping, localhost gateway, atau kode pemasangan. APK mengakses MikroTik secara langsung melalui RouterOS API. Pesan, hasil pembacaan router yang diperlukan, dan instruksi fungsi dikirim ke OpenAI melalui HTTPS; fungsi dan perubahan router dieksekusi di HP.
 
+**Build lokal berhasil:** [GitHub Actions 34040031683](https://github.com/ebsrccl/Clonework/actions/runs/34040031683), 15 tes Android lulus, lint tanpa error, tanda tangan APK terverifikasi. Pengujian pada HP dan akun router/OpenAI pengguna belum dilakukan.
+
 ## Mulai
 
 1. Pasang **Mikrotik-Agent-Lokal-0.2.apk**, lalu buka **MikroTik Agent Lokal**.

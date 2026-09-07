@@ -4,6 +4,10 @@ Versi ini menggantikan arsitektur APK gateway 0.1 atas permintaan pengguna. Selu
 
 ## Pasang APK
 
+[Build lokal yang berhasil](https://github.com/ebsrccl/Clonework/actions/runs/34040031683): unduh artefak **Mikrotik-Agent-Lokal-APK** dan ekstrak APK jika mengambil dari GitHub. Artefak GitHub dijadwalkan kedaluwarsa 20 September 2026; salinan APK juga disediakan langsung dalam percakapan.
+
+APK pertama versi lokal berukuran **42.872 byte**, SHA-256 `6cc7d72d351e781d81b40c66ac36806b7e17ea491a17c20a785fba4e82de04c6`.
+
 Pasang `Mikrotik-Agent-Lokal-0.2.apk`, lalu buka **MikroTik Agent Lokal**. Android minimal versi 8. Aplikasi lokal memakai ID berbeda dari versi 0.1, sehingga kedua aplikasi dapat terpasang bersamaan. Pastikan membuka yang bernama **Lokal**. Tidak perlu menghapus aplikasi lama untuk memasang versi ini.
 
 Jika Android meminta izin pemasangan, izinkan pengelola berkas/browser yang digunakan untuk membuka berkas APK. **Lihat demo tanpa koneksi** tersedia sebelum pengaturan akun dan memakai data contoh.
