@@ -41,7 +41,7 @@ jobs:
             codex-android-01534-rust195-ndk27-
       - name: Android build toolchain
         run: |
-          rustup toolchain install 1.95.0 --profile minimal --target "$CODEX_ANDROID_TARGET"
+          rustup toolchain install 1.95.0 --profile minimal --component rust-src --target "$CODEX_ANDROID_TARGET"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;27.2.12479018'
       - name: Build executable using Android libc and vendored TLS
         working-directory: codex-rs
@@ -59,7 +59,23 @@ jobs:
           export "CC_${target_env}=$toolchain_bin/${CODEX_ANDROID_TARGET}26-clang"
           export "AR_${target_env}=$toolchain_bin/llvm-ar"
           export "RANLIB_${target_env}=$toolchain_bin/llvm-ranlib"
-          cargo +1.95.0 build --package codex-app-server --bin codex-app-server --target "$CODEX_ANDROID_TARGET"
+          # Rust 1.95 omits Android from std File locking despite Bionic supporting flock.
+          # Enable the same kernel-backed locks as Linux; preserve lock contention/errors.
+          python3 - <<'PYLOCK'
+          from pathlib import Path
+          import subprocess
+          root = Path(subprocess.check_output(['rustc', '+1.95.0', '--print', 'sysroot'], text=True).strip())
+          source = root / 'lib/rustlib/src/rust/library/std/src/sys/fs/unix.rs'
+          text = source.read_text()
+          start = text.index('    pub fn lock(&self)')
+          start = text.rfind('    #[cfg(any(', 0, start)
+          end = text.index('    pub fn truncate(', start)
+          section = text[start:end]
+          assert section.count('target_os = "linux",') == 10
+          section = section.replace('target_os = "linux",', 'target_os = "linux",\n        target_os = "android",')
+          source.write_text(text[:start] + section + text[end:])
+          PYLOCK
+          RUSTC_BOOTSTRAP=1 cargo +1.95.0 build -Z build-std=std,panic_unwind --package codex-app-server --bin codex-app-server --target "$CODEX_ANDROID_TARGET"
           mkdir -p "../native-output/jniLibs/$CODEX_ANDROID_ABI" ../native-output/licenses
           cp "target/$CODEX_ANDROID_TARGET/debug/codex-app-server" "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
           "$toolchain_bin/llvm-strip" --strip-unneeded "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
@@ -68,7 +84,7 @@ jobs:
           cp Cargo.lock ../native-output/Cargo.lock
           "$toolchain_bin/llvm-readelf" -l -d "../native-output/jniLibs/$CODEX_ANDROID_ABI/libcodex.so"
           cd ../native-output
-          printf '%s\n' 'OpenAI Codex 0.153.4; source 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a' 'Android build by Clonework; OpenSSL vendored; no auth or policy code changes' > BUILD_INFO.txt
+          printf '%s\n' 'OpenAI Codex 0.153.4; source 3d2ee51ca2d5db578f328aa75e20aa22c0197c9a' 'Android build by Clonework; OpenSSL vendored; Rust std Android flock enabled; no auth or policy code changes' > BUILD_INFO.txt
           sha256sum jniLibs/*/*.so > SHA256SUMS.txt
       - name: Native executable artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
