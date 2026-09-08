@@ -118,5 +118,14 @@ final class RouterApi implements LocalAgent.Router {
         for (int i = 0; i < raw.length(); i++) { JSONObject row = raw.getJSONObject(i), selected = new JSONObject(); for (String field : fields) if (row.has(field)) selected.put(field, row.get(field)); clean.put(selected); }
         return clean;
     }
+    @Override public JSONArray lookup(String path,String[] fields,String key,String value) throws Exception {
+        JSONArray raw=run(path+"/print", "=.proplist="+String.join(",",fields), "?"+key+"="+value),clean=new JSONArray();
+        for(int i=0;i<raw.length();i++){JSONObject selected=new JSONObject(),row=raw.getJSONObject(i);for(String field:fields)if(row.has(field))selected.put(field,row.get(field));clean.put(selected);}return clean;
+    }
+    @Override public void mutate(String path,String action,JSONObject args) throws Exception {
+        java.util.List<String> words=new java.util.ArrayList<>(); words.add(path+"/"+action);
+        java.util.Iterator<String> keys=args.keys(); while(keys.hasNext()) { String key=keys.next(); words.add("="+key+"="+args.getString(key)); }
+        run(words.toArray(new String[0]));
+    }
     public void setQueue(String id, String limit) throws Exception { run("/queue/simple/set", "=.id=" + id, "=max-limit=" + limit); }
 }

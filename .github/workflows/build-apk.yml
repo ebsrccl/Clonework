@@ -88,12 +88,12 @@ jobs:
           adb shell wm density 420
           adb install android/app/build/outputs/apk/debug/app-x86_64-debug.apk
           adb install android/app/build/outputs/apk/androidTest/debug/*.apk
-          adb shell am instrument -w id.mas.agent.chatgpt.test/id.mas.agent.SmokeProbe | tee /tmp/login-protocol.txt
+          adb shell am instrument -w id.mas.agent.chatgpt.v4.test/id.mas.agent.SmokeProbe | tee /tmp/login-protocol.txt
           grep -q CHATGPT_ANDROID_LOGIN_PROTOCOL_PASS /tmp/login-protocol.txt
       - name: Inspect login screen and prepare signed APK
         run: |
           mkdir -p output validation
-          adb shell am start -n id.mas.agent.chatgpt/id.mas.agent.MainActivity
+          adb shell am start -n id.mas.agent.chatgpt.v4/id.mas.agent.MainActivity
           sleep 8
           adb shell uiautomator dump /sdcard/agent-window.xml
           adb pull /sdcard/agent-window.xml validation/login-window.xml
@@ -101,12 +101,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           text = Path('validation/login-window.xml').read_text()
-          assert 'Akun ChatGPT' in text and 'API key OpenAI' not in text
+          assert 'Router tersimpan' in text and 'API key OpenAI' not in text
           PY
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
-          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk output/Mikrotik-Agent-ChatGPT-0.3-ARM64.apk
+          cp android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk output/Mikrotik-Agent-ChatGPT-0.4-ARM64.apk
           cd output
-          sha256sum Mikrotik-Agent-ChatGPT-0.3-ARM64.apk > SHA256SUMS.txt
+          sha256sum Mikrotik-Agent-ChatGPT-0.4-ARM64.apk > SHA256SUMS.txt
       - name: Test reports and runtime diagnostics
         if: always()
         run: |

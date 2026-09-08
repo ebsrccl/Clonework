@@ -3,12 +3,12 @@ android {
     namespace 'id.mas.agent'
     compileSdk 36
     defaultConfig {
-        applicationId 'id.mas.agent.chatgpt'
+        applicationId 'id.mas.agent.chatgpt.v4'
         minSdk 26
         targetSdk 36
         testInstrumentationRunner 'id.mas.agent.SmokeProbe'
-        versionCode 3
-        versionName '0.3.0-chatgpt-preview'
+        versionCode 4
+        versionName '0.4.0-multirouter-preview'
     }
     buildFeatures { buildConfig true }
     packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += ['**/libcodex.so'] } }

@@ -19,6 +19,16 @@ public final class SmokeProbe extends Instrumentation {
             if (brain.account().getBoolean("signed_in")) throw new AssertionError("Cancel state");
             brain.close();
             if (brain.account().getBoolean("signed_in")) throw new AssertionError("Restart state");
+            SecureSession store = new SecureSession(getTargetContext());
+            RouterVault vault = new RouterVault(store);
+            JSONObject config = new JSONObject().put("name","CI router").put("host","127.0.0.1").put("port",8728).put("tls",false).put("username","ci").put("password","test-only").put("certificate_sha256","");
+            String first = vault.saveConfig(null,config), second = vault.saveConfig(null,new JSONObject(config.toString()).put("name","Second"));
+            RouterVault restored = new RouterVault(store);
+            if(restored.list().length()!=2 || !second.equals(restored.active())) throw new AssertionError("Encrypted multirouter persistence");
+            byte[] backup = VaultBackup.encode(restored.exportData(),"ci-only-long-password".toCharArray());
+            if(VaultBackup.decode(backup,"ci-only-long-password".toCharArray()).getJSONObject("routers").length()!=2) throw new AssertionError("Android portable backup");
+            restored.remove(first);restored.remove(second);
+            Log.i("ChatGptSmoke","MULTIROUTER_ANDROID_STORAGE_PASS");
             result.putString("stream", "CHATGPT_ANDROID_LOGIN_PROTOCOL_PASS\n");
             Log.i("ChatGptSmoke", "CHATGPT_ANDROID_LOGIN_PROTOCOL_PASS");
             finish(-1, result);

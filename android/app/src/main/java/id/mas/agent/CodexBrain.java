@@ -56,7 +56,7 @@ final class CodexBrain implements LocalAgent.Brain {
         process = builder.start(); rpc = new CodexRpc(process.getInputStream(), process.getOutputStream());
         try {
             rpc.request("initialize", new JSONObject().put("clientInfo", new JSONObject().put("name", "mikrotik_agent_android")
-                .put("title", "MikroTik Agent Android").put("version", "0.3.0"))
+                .put("title", "MikroTik Agent Android").put("version", "0.4.0"))
                 .put("capabilities", new JSONObject().put("experimentalApi", true)), 45);
             rpc.notify("initialized");
         } catch (Exception e) { close(); throw new IOException("Runtime ChatGPT gagal dimulai di HP ini."); }
