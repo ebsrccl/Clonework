@@ -1,5 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <application android:label="Codex Android runtime probe" android:allowBackup="false" android:extractNativeLibs="true" />
-    <instrumentation android:name="id.mas.codexprobe.Probe" android:targetPackage="id.mas.codexprobe" />
-</manifest>
